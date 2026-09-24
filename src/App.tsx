@@ -22,12 +22,14 @@ function App() {
         <div className="landing-buttons"> {/* Holds the landing page buttons */}
           <button 
             type="button" 
+            className="tutorial-button" /* Styles the Start Tutorial button */
           > 
             Start Tutorial
           </button> {/* Button that will eventually start the tutorial */}
 
           <button 
             type="button" 
+            className="simulator-button" /* Styles the Open Simulator button */
           > 
             Open Simulator
           </button> {/* Button that will eventually open the simulator */}

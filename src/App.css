@@ -197,6 +197,12 @@
   font-size: 16px; /* Sets the button text size */
   border-radius: 6px; /* Rounds the corners of the buttons */
   cursor: pointer; /* Shows the hand cursor when hovering over a button */
+  transition: transform 0.2s; /* Makes the hover movement smooth */
+}
+
+.landing-buttons button:hover {
+  transform: translateY(-2px); /* Moves the button slightly upward when hovered */
+  filter: brightness(1.1); /* Makes the button slightly brighter when hovered */
 }
 
 .landing-description {
@@ -206,4 +212,20 @@
 
 .about-section {
   max-width: 800px; /* Keeps the about section from becoming too wide */
+  line-height: 1.6; /* Adds comfortable spacing between lines of text */
+   margin-top: 20px; /* Adds space above the about section */
+}
+
+.tutorial-button {
+  background-color: #646cff; /* Gives the tutorial button a primary color */
+  color: white; /* Makes the button text white */
+}
+
+.simulator-button {
+  background-color: #646cff; /* Gives the simulator button the same purple background */
+  color: white; /* Makes the button text white */
+}
+
+.landing-intro {
+  text-align: center; /* Centers the title and description */
 }

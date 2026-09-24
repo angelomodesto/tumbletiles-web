@@ -229,3 +229,18 @@
 .landing-intro {
   text-align: center; /* Centers the title and description */
 }
+
+.board-grid {
+  display: grid; /* Arranges the board cells into a grid */
+  grid-template-columns: repeat(15, 30px); /* Creates 15 columns that are 30px wide */
+  grid-template-rows: repeat(15, 30px); /* Creates 15 rows that are 30px tall */
+  width: fit-content; /* Makes the grid only as wide as its 15 columns */
+  margin: 0 auto; /* Centers the board horizontally */
+}
+
+.board-cell {
+  width: 30px; /* Sets the width of each board square */
+  height: 30px; /* Sets the height of each board square */
+  border: 1px solid #555; /* Adds a border so each square is visible */
+  box-sizing: border-box; /* Keeps the border inside the 30px cell size */
+}

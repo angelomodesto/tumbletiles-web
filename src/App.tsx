@@ -1,9 +1,40 @@
+import { useState } from 'react' // Lets the page remember which screen should be shown
 import heroImg from './assets/hero.png'
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import './App.css'
 
 function App() {
+  const [showSimulator, setShowSimulator] = useState(false) // Tracks whether the simulator should be shown
+
+  if (showSimulator) {
+    return (
+      <div className="simulator-page"> {/* Main simulator page */}
+        <h1>Tumble Tiles Simulator</h1> {/* Simulator page title */}
+
+        <p>
+        Build, control, and experiment with Tumble Tiles.
+        </p> {/* Short description of the simulator */}
+
+        <div className="simulator-board"> {/* Holds the Tumble Tiles board */} 
+          <h2>Board</h2> {/* Board section title */} 
+ 
+          <div className="board-grid"> {/* Holds the squares that make up the board */} 
+            {Array.from({ length: 225 }).map((_, index) => (
+              <div 
+                className="board-cell"
+                key={index}
+                onClick={() => console.log(`Cell ${index} clicked`)} /* Shows which board cell was clicked */
+              ></div> /* Creates one square for the board */
+            ))}
+          </div>
+        </div> {/* Closes the simulator board */}
+ 
+      </div> 
+    )
+  }
+
+
   return (
     <>
       <section id="center" className="landing-page"> {/* Main landing page section */}
@@ -30,6 +61,7 @@ function App() {
           <button 
             type="button" 
             className="simulator-button" /* Styles the Open Simulator button */
+            onClick={() => setShowSimulator(true)} /* Changes to the simulator when clicked */
           > 
             Open Simulator
           </button> {/* Button that will eventually open the simulator */}

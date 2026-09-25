@@ -9,6 +9,7 @@ function App() {
   const [selectedCells, setSelectedCells] = useState<number[]>([]) // Stores the board cells that have been selected
   const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
   const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
+  const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
 
   if (showSimulator) {
     return (
@@ -53,11 +54,20 @@ function App() {
           <div className="board-grid"> {/* Holds the squares that make up the board */} 
             {Array.from({ length: 225 }).map((_, index) => (
               <div 
-                className={`board-cell ${selectedCells.includes(index) ? 'selected' : ''}`} /* Adds selected style if the cell was clicked */
+                className={`board-cell ${robots.includes(index) ? 'robot' : ''} ${walls.includes(index) ? 'wall' : ''}`} /* Adds robot or wall style to the cell */
                 key={index}
                 onClick={() => {
-                  if (selectedTool === 'robot') {
-                    setRobots([...robots, index]) // Places a robot in the clicked cell
+                  if (selectedTool === 'robot' && !robots.includes(index) && !walls.includes(index)) {
+                    setRobots([...robots, index]) // Places a robot only if the cell is empty
+                  }
+
+                  if (selectedTool === 'wall' && !walls.includes(index) && !robots.includes(index)) {
+                    setWalls([...walls, index]) // Places a wall only if the cell is empty
+                  }
+
+                  if (selectedTool === 'erase') {
+                    setRobots(robots.filter((robot) => robot !== index)) // Removes a robot from the clicked cell
+                    setWalls(walls.filter((wall) => wall !== index)) // Removes a wall from the clicked cell
                   }
                 }}
               ></div> /* Creates one square for the board */

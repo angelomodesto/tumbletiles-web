@@ -245,6 +245,14 @@
   box-sizing: border-box; /* Keeps the border inside the 30px cell size */
 }
 
+.board-cell.robot {
+  background-color: #646cff; /* Gives cells containing robots a purple color */
+}
+
+.board-cell.wall {
+  background-color: #555; /* Gives cells containing walls a gray color */
+}
+
 .board-cell.selected {
   background-color: #646cff; /* Changes the cell color when it is selected */
 }

@@ -244,3 +244,12 @@
   border: 1px solid #555; /* Adds a border so each square is visible */
   box-sizing: border-box; /* Keeps the border inside the 30px cell size */
 }
+
+.board-cell.selected {
+  background-color: #646cff; /* Changes the cell color when it is selected */
+}
+
+.active-tool {
+  background-color: #646cff; /* Highlights the currently selected tool */
+  color: white; /* Makes the selected tool text white */
+}

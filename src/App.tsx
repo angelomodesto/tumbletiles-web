@@ -6,6 +6,9 @@ import './App.css'
 
 function App() {
   const [showSimulator, setShowSimulator] = useState(false) // Tracks whether the simulator should be shown
+  const [selectedCells, setSelectedCells] = useState<number[]>([]) // Stores the board cells that have been selected
+  const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
+  const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
 
   if (showSimulator) {
     return (
@@ -13,8 +16,36 @@ function App() {
         <h1>Tumble Tiles Simulator</h1> {/* Simulator page title */}
 
         <p>
-        Build, control, and experiment with Tumble Tiles.
+          Build, control, and experiment with Tumble Tiles.
         </p> {/* Short description of the simulator */}
+
+        <div className="simulator-tools"> {/* Holds the tools used to edit the board */}
+          <h2>Tools</h2> {/* Tools section title */}
+
+          <button
+            type="button"
+            className={selectedTool === 'robot' ? 'active-tool' : ''} /* Highlights Robot when selected */
+            onClick={() => setSelectedTool('robot')} /* Selects the Robot tool */
+          >
+            Robot
+          </button>
+
+          <button
+            type="button"
+            className={selectedTool === 'wall' ? 'active-tool' : ''} /* Highlights Wall when selected */
+            onClick={() => setSelectedTool('wall')} /* Selects the Wall tool */
+          >
+            Wall
+          </button>
+
+          <button
+            type="button"
+            className={selectedTool === 'erase' ? 'active-tool' : ''} /* Highlights Erase when selected */
+            onClick={() => setSelectedTool('erase')} /* Selects the Erase tool */
+          >
+            Erase
+          </button>
+        </div>
 
         <div className="simulator-board"> {/* Holds the Tumble Tiles board */} 
           <h2>Board</h2> {/* Board section title */} 
@@ -22,9 +53,13 @@ function App() {
           <div className="board-grid"> {/* Holds the squares that make up the board */} 
             {Array.from({ length: 225 }).map((_, index) => (
               <div 
-                className="board-cell"
+                className={`board-cell ${selectedCells.includes(index) ? 'selected' : ''}`} /* Adds selected style if the cell was clicked */
                 key={index}
-                onClick={() => console.log(`Cell ${index} clicked`)} /* Shows which board cell was clicked */
+                onClick={() => {
+                  if (selectedTool === 'robot') {
+                    setRobots([...robots, index]) // Places a robot in the clicked cell
+                  }
+                }}
               ></div> /* Creates one square for the board */
             ))}
           </div>

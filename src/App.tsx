@@ -10,6 +10,8 @@ function App() {
   const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
   const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
   const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
+  const [boardWidth, setBoardWidth] = useState(15) // Stores the board width, starting at 15
+  const [boardHeight, setBoardHeight] = useState(15) // Stores the board height, starting at 15
 
 
   // Movement function
@@ -21,11 +23,11 @@ function App() {
       let newPosition = robot // Starts at the robot's current position
 
       while (
-        newPosition >= 15 &&
-        !walls.includes(newPosition - 15) &&
-        !newRobots.includes(newPosition - 15)
+        newPosition >= boardWidth &&
+        !walls.includes(newPosition - boardWidth) &&
+        !newRobots.includes(newPosition - boardWidth)
       ) {
-        newPosition -= 15 // Moves the robot up one row
+        newPosition -= boardWidth // Moves the robot up one row based on the board width
       }
 
       newRobots.push(newPosition) // Saves the robot's final position
@@ -43,11 +45,11 @@ function App() {
       let newPosition = robot // Starts at the robot's current position
 
       while (
-        newPosition < 210 &&
-        !walls.includes(newPosition + 15) &&
-        !newRobots.includes(newPosition + 15)
+        newPosition < boardWidth * (boardHeight - 1) &&
+        !walls.includes(newPosition + boardWidth) &&
+        !newRobots.includes(newPosition + boardWidth)
       ) {
-        newPosition += 15 // Moves the robot down one row
+        newPosition += boardWidth // Moves the robot down one row based on the board width
       }
 
       newRobots.push(newPosition) // Saves the robot's final position
@@ -65,7 +67,7 @@ function App() {
       let newPosition = robot // Starts at the robot's current position
 
       while (
-        newPosition % 15 !== 0 &&
+        newPosition % boardWidth !== 0 &&
         !walls.includes(newPosition - 1) &&
         !newRobots.includes(newPosition - 1)
       ) {
@@ -87,7 +89,7 @@ function App() {
       let newPosition = robot // Starts at the robot's current position
 
       while (
-        newPosition % 15 !== 14 &&
+        newPosition % boardWidth !== boardWidth - 1 &&
         !walls.includes(newPosition + 1) &&
         !newRobots.includes(newPosition + 1)
       ) {
@@ -177,13 +179,56 @@ function App() {
           >
             Erase
           </button>
+        </div> {/* End of Tools */}
+
+
+
+        <div className="board-settings"> {/* Holds settings for the simulator board */}
+          <h2>Board Settings</h2> {/* Board settings title */}
+
+          <label>
+            Width:
+            <input
+              type="number"
+              value={boardWidth}
+              onChange={(event) => setBoardWidth(Number(event.target.value))}
+            />
+          </label>
+
+          <label>
+            Height:
+            <input
+              type="number"
+              value={boardHeight}
+              onChange={(event) => setBoardHeight(Number(event.target.value))}
+            />
+          </label>
+
+
+          <button
+            type="button"
+            onClick={() => {
+              setRobots([]) // Removes all robots from the board
+              setWalls([]) // Removes all walls from the board
+            }}
+          >
+            Clear Board
+          </button>
         </div>
+
+
 
         <div className="simulator-board"> {/* Holds the Tumble Tiles board */} 
           <h2>Board</h2> {/* Board section title */} 
  
-          <div className="board-grid"> {/* Holds the squares that make up the board */} 
-            {Array.from({ length: 225 }).map((_, index) => (
+          <div
+            className="board-grid"
+            style={{
+              gridTemplateColumns: `repeat(${boardWidth}, 30px)`,
+              gridTemplateRows: `repeat(${boardHeight}, 30px)`
+            }} /* Changes the grid size based on the selected width and height */
+          > 
+            {Array.from({ length:  boardWidth * boardHeight }).map((_, index) => (
               <div 
                 className={`board-cell ${robots.includes(index) ? 'robot' : ''} ${walls.includes(index) ? 'wall' : ''}`} /* Adds robot or wall style to the cell */
                 key={index}

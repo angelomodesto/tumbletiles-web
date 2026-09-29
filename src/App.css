@@ -232,8 +232,6 @@
 
 .board-grid {
   display: grid; /* Arranges the board cells into a grid */
-  grid-template-columns: repeat(15, 30px); /* Creates 15 columns that are 30px wide */
-  grid-template-rows: repeat(15, 30px); /* Creates 15 rows that are 30px tall */
   width: fit-content; /* Makes the grid only as wide as its 15 columns */
   margin: 0 auto; /* Centers the board horizontally */
 }
@@ -260,4 +258,22 @@
 .active-tool {
   background-color: #646cff; /* Highlights the currently selected tool */
   color: white; /* Makes the selected tool text white */
+}
+
+.board-settings {
+  display: flex; /* Uses flexbox to organize the board settings */
+  flex-direction: column; /* Stacks the settings vertically */
+  align-items: center; /* Centers everything */
+  gap: 10px; /* Adds space between each setting */
+}
+
+.board-settings label {
+  display: flex; /* Keeps the label and input next to each other */
+  align-items: center; /* Lines up the label and input */
+  gap: 8px; /* Adds space between the label and input */
+}
+
+.board-settings input {
+  width: 60px; /* Keeps the number boxes small */
+  padding: 5px; /* Adds space inside the number boxes */
 }

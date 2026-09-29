@@ -7,7 +7,6 @@ import './App.css'
 function App() {
   // State
   const [showSimulator, setShowSimulator] = useState(false) // Tracks whether the simulator should be shown
-  const [selectedCells, setSelectedCells] = useState<number[]>([]) // Stores the board cells that have been selected
   const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
   const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
   const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
@@ -138,6 +137,14 @@ function App() {
   if (showSimulator) {
     return (
       <div className="simulator-page"> {/* Main simulator page */}
+
+        <button
+          type="button"
+          onClick={() => setShowSimulator(false)} /* Returns to the landing page */
+        >
+          ← Back to Home
+        </button>
+
         <h1>Tumble Tiles Simulator</h1> {/* Simulator page title */}
 
         <p>

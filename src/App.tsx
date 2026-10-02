@@ -7,6 +7,13 @@ import './App.css'
 function App() {
   // State
   const [showSimulator, setShowSimulator] = useState(false) // Tracks whether the simulator should be shown
+  const [showTutorial, setShowTutorial] = useState(false) // Tracks whether the tutorial should be shown
+  const [tutorialStep, setTutorialStep] = useState(1) // Tracks which tutorial step the user is currently on
+  const [tutorialRobots, setTutorialRobots] = useState<number[]>([]) // Stores robots placed on the tutorial board
+  const [tutorialWalls, setTutorialWalls] = useState<number[]>([]) // Stores walls placed on the tutorial board
+  const [tutorialEraseCells, setTutorialEraseCells] = useState<number[]>([6, 12, 18]) // Stores objects that can be erased during the tutorial
+  const [tutorialMoveRobot, setTutorialMoveRobot] = useState(12) // Stores the robot's position for the movement tutorial
+  const [tutorialHasMoved, setTutorialHasMoved] = useState(false) // Tracks whether the user has moved the tutorial robot
   const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
   const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
   const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
@@ -105,26 +112,58 @@ function App() {
 
   useEffect(() => { // Listens for keyboard arrow key presses
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!showSimulator) return // Only uses arrow keys while the simulator is open
+      if (!showSimulator && !showTutorial) return // Only uses arrow keys in the simulator or tutorial
 
       if (event.key === 'ArrowUp') {
         event.preventDefault() // Prevents the page from scrolling
-        moveUp() // Moves robots up
+
+        if (showSimulator) {
+          moveUp() // Moves robots up in the real simulator
+        }
+
+        if (showTutorial && tutorialStep === 5) {
+          setTutorialMoveRobot((robot) => robot % 5) // Moves the tutorial robot to the top
+          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+        }
       }
 
       if (event.key === 'ArrowDown') {
         event.preventDefault() // Prevents the page from scrolling
-        moveDown() // Moves robots down
+
+        if (showSimulator) {
+          moveDown() // Moves robots down in the real simulator
+        }
+
+        if (showTutorial && tutorialStep === 5) {
+          setTutorialMoveRobot((robot) => 20 + (robot % 5)) // Moves the tutorial robot to the bottom
+          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+        }
       }
 
       if (event.key === 'ArrowLeft') {
         event.preventDefault() // Prevents the page from scrolling
-        moveLeft() // Moves robots left
+
+        if (showSimulator) {
+          moveLeft() // Moves robots left in the real simulator
+        }
+
+        if (showTutorial && tutorialStep === 5) {
+          setTutorialMoveRobot((robot) => Math.floor(robot / 5) * 5) // Moves the tutorial robot to the left edge
+          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+        }
       }
 
       if (event.key === 'ArrowRight') {
         event.preventDefault() // Prevents the page from scrolling
-        moveRight() // Moves robots right
+
+        if (showSimulator) {
+          moveRight() // Moves robots right in the real simulator
+        }
+
+        if (showTutorial && tutorialStep === 5) {
+          setTutorialMoveRobot((robot) => Math.floor(robot / 5) * 5 + 4) // Moves the tutorial robot to the right edge
+          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+        }
       }
     }
 
@@ -133,7 +172,315 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown) // Stops listening when no longer needed
     }
-  }, [showSimulator, robots, walls])
+  }, [showSimulator, showTutorial, tutorialStep, robots, walls])
+
+
+
+// Tutorial page
+if (showTutorial) {
+  return (
+    <div className="tutorial-page"> {/* Main tutorial page */}
+
+      <button
+        type="button"
+        onClick={() => {
+          setTutorialStep(1) // Resets the tutorial back to step 1
+          setTutorialRobots([]) // Removes all robots placed during the tutorial
+          setTutorialWalls([]) // Removes all walls placed during the tutorial
+          setTutorialEraseCells([6, 12, 18]) // Restores the objects for the erase tutorial
+          setTutorialMoveRobot(12) // Puts the movement robot back in the center
+          setTutorialHasMoved(false) // Resets whether the movement step has been completed
+          setShowTutorial(false) // Returns to the home page
+        }}
+      >
+        ← Back to Home
+      </button>
+
+      <h1>Tumble Tiles Tutorial</h1> {/* Tutorial page title */}
+
+      <p>
+        Learn how to use the Tumble Tiles simulator step by step.
+      </p> {/* Short description of the tutorial */}
+
+      <div className="tutorial-content"> {/* Holds the current tutorial step */}
+
+        {tutorialStep === 1 && (
+          <div> {/* Shows the introduction only during step 1 */}
+
+            <h2>Step 1: Introduction</h2>
+
+            <p>
+              Tumble Tiles lets you place robots and obstacles on a board and move the robots in different directions.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setTutorialStep(2)} /* Moves to tutorial step 2 */
+            >
+              Next →
+            </button>
+
+          </div>
+        )}
+
+
+        {tutorialStep === 2 && (
+          <div> {/* Shows the robot instructions only during step 2 */}
+
+            <h2>Step 2: Place a Robot</h2>
+
+            <p>
+              Select the Robot tool and click an empty square on the board to place a robot.
+            </p>
+
+            <div className="tutorial-board"> {/* Holds the small practice board */}
+              {Array.from({ length: 25 }).map((_, index) => (
+                <div
+                  key={index}
+                  className={`tutorial-cell ${tutorialRobots.includes(index) ? 'robot' : ''}`} /* Shows a robot when the cell is selected */
+                  onClick={() => {
+                    if (!tutorialRobots.includes(index)) {
+                      setTutorialRobots([...tutorialRobots, index]) // Places a robot on the clicked tutorial cell
+                    }
+                  }}
+                ></div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setTutorialStep(1)} /* Returns to tutorial step 1 */
+            >
+              ← Back
+            </button>
+            
+            
+            {tutorialRobots.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setTutorialStep(3)} /* Moves to tutorial step 3 */
+              >
+                Next →
+              </button>
+            )}
+
+            </div>
+        )}
+
+        {tutorialStep === 3 && (
+          <div> {/* Shows the wall instructions only during step 3 */}
+
+            <h2>Step 3: Place a Wall</h2>
+
+            <p>
+              Select the Wall tool and click an empty square on the board to place a wall.
+            </p>
+
+
+            <div className="tutorial-board"> {/* Holds the wall practice board */}
+              {Array.from({ length: 25 }).map((_, index) => (
+                <div
+                  key={index}
+                  className={`tutorial-cell ${tutorialWalls.includes(index) ? 'wall' : ''}`} /* Shows a wall when the cell is selected */
+                  onClick={() => {
+                    if (!tutorialWalls.includes(index)) {
+                      setTutorialWalls([...tutorialWalls, index]) // Places a wall on the clicked tutorial cell
+                    }
+                  }}
+                ></div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setTutorialStep(2)} /* Returns to tutorial step 2 */
+            >
+              ← Back
+            </button>
+
+            {tutorialWalls.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setTutorialStep(4)} /* Moves to tutorial step 4 */
+              >
+                Next →
+              </button>
+            )}
+
+          </div>
+        )}
+
+        {tutorialStep === 4 && (
+          <div> {/* Shows the erase instructions only during step 4 */}
+
+            <h2>Step 4: Use Erase</h2>
+
+            <p>
+              Select the Erase tool and click a robot or wall to remove it from the board.
+            </p>
+
+            <div className="tutorial-board"> {/* Holds the erase practice board */}
+              {Array.from({ length: 25 }).map((_, index) => (
+                <div
+                  key={index}
+                  className={`tutorial-cell ${tutorialEraseCells.includes(index) ? 'robot' : ''}`} /* Shows objects that can be erased */
+                  onClick={() => {
+                    if (tutorialEraseCells.includes(index)) {
+                      setTutorialEraseCells(
+                        tutorialEraseCells.filter((cell) => cell !== index)
+                      ) // Removes the clicked object from the tutorial board
+                    }
+                  }}
+                ></div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setTutorialStep(3)} /* Returns to tutorial step 3 */
+            >
+              ← Back
+            </button>
+
+            {tutorialEraseCells.length === 0 && (
+              <button
+                type="button"
+                onClick={() => setTutorialStep(5)} /* Moves to tutorial step 5 */
+              >
+                Next →
+              </button>
+            )}
+
+          </div>
+        )}
+
+
+        {tutorialStep === 5 && (
+          <div> {/* Shows the movement instructions only during step 5 */}
+
+            <h2>Step 5: Move the Robots</h2>
+
+            <p>
+              Use the movement buttons or the keyboard arrow keys to move the robots up, down, left, or right.
+              Robots will keep moving until they reach the edge of the board, a wall, or another robot.
+            </p>
+
+            <div className="tutorial-board"> {/* Holds the movement practice board */}
+              {Array.from({ length: 25 }).map((_, index) => (
+                <div
+                  key={index}
+                  className={`tutorial-cell ${tutorialMoveRobot === index ? 'robot' : ''}`} /* Shows the robot at its current position */
+                ></div>
+              ))}
+            </div>
+
+            <div className="tutorial-movement"> {/* Holds the tutorial movement buttons */}
+
+              <button
+                type="button"
+                 onClick={() => {
+                  setTutorialMoveRobot(tutorialMoveRobot % 5) // Moves the robot to the top of its current column
+                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
+                }}
+              >
+                ↑
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTutorialMoveRobot(Math.floor(tutorialMoveRobot / 5) * 5) // Moves the robot to the left edge of its current row
+                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
+                }}
+              >
+                ←
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTutorialMoveRobot(20 + (tutorialMoveRobot % 5)) // Moves the robot to the bottom of its current column
+                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
+                }}
+              >
+                ↓
+              </button>
+
+              <button
+                type="button"
+                 onClick={() => {
+                  setTutorialMoveRobot(Math.floor(tutorialMoveRobot / 5) * 5 + 4) // Moves the robot to the right edge of its current row
+                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
+                }}
+              >
+                →
+              </button>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setTutorialStep(4)} /* Returns to tutorial step 4 */
+            >
+              ← Back
+            </button>
+
+            {tutorialHasMoved && (
+              <button
+                type="button"
+                onClick={() => setTutorialStep(6)} /* Moves to tutorial step 6 */
+              >
+                Next →
+              </button>
+            )}
+
+          </div>
+
+          
+        )}
+
+
+        {tutorialStep === 6 && (
+          <div> {/* Shows the final tutorial step */}
+
+            <h2>Step 6: Tutorial Complete!</h2>
+
+            <p>
+              You now know the basics of using the Tumble Tiles simulator. You can place robots and walls, erase objects, and move robots around the board.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setTutorialStep(5)} /* Returns to tutorial step 5 */
+            >
+              ← Back
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTutorialStep(1) // Resets the tutorial back to step 1
+                setTutorialRobots([]) // Removes all robots placed during the tutorial
+                setTutorialWalls([]) // Removes all walls placed during the tutorial
+                setTutorialEraseCells([6, 12, 18]) // Restores the objects for the erase tutorial
+                setTutorialMoveRobot(12) // Puts the movement robot back in the center
+                setTutorialHasMoved(false) // Resets whether the movement step has been completed
+                setShowTutorial(false) // Returns to the home page
+              }}
+            >
+              Finish Tutorial
+            </button>
+
+          </div>
+        )}
+
+      </div> {/* Closes tutorial content */}
+
+    </div> /* Closes tutorial page */
+  )
+}
+
+
 
   // Simulator page
   if (showSimulator) {
@@ -307,6 +654,7 @@ function App() {
           <button 
             type="button" 
             className="tutorial-button" /* Styles the Start Tutorial button */
+            onClick={() => setShowTutorial(true)} /* Opens the tutorial when clicked */
           > 
             Start Tutorial
           </button> {/* Button that will eventually start the tutorial */}

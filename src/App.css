@@ -277,3 +277,43 @@
   width: 60px; /* Keeps the number boxes small */
   padding: 5px; /* Adds space inside the number boxes */
 }
+
+
+.tutorial-page {
+  text-align: center; /* Centers the tutorial content */
+  padding: 40px 20px; /* Adds space around the tutorial page */
+}
+
+.tutorial-content {
+  max-width: 600px; /* Prevents the tutorial from becoming too wide */
+  margin: 30px auto; /* Centers the tutorial section */
+  line-height: 1.6; /* Adds comfortable spacing between lines */
+}
+
+.tutorial-content button {
+  margin: 10px 5px; /* Adds space between the Back and Next buttons */
+}
+
+.tutorial-board {
+  display: grid; /* Arranges the tutorial cells into a grid */
+  grid-template-columns: repeat(5, 40px); /* Creates 5 columns */
+  grid-template-rows: repeat(5, 40px); /* Creates 5 rows */
+  width: fit-content; /* Keeps the board only as wide as its cells */
+  margin: 20px auto; /* Centers the board and adds space around it */
+}
+
+.tutorial-cell {
+  width: 40px; /* Sets the width of each tutorial square */
+  height: 40px; /* Sets the height of each tutorial square */
+  border: 1px solid #555; /* Makes each square visible */
+  box-sizing: border-box; /* Keeps the border inside the cell size */
+  cursor: pointer; /* Shows that the cells can be clicked */
+}
+
+.tutorial-cell.robot {
+  background-color: #646cff; /* Makes a tutorial robot purple */
+}
+
+.tutorial-cell.wall {
+  background-color: #555; /* Makes a tutorial wall gray */
+}

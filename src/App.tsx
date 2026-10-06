@@ -3,6 +3,8 @@ import heroImg from './assets/hero.png'
 import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import './App.css'
+import type { Direction } from './engine'
+import { addConcrete, addTile, createBoard, fromIndex, toIndex, tumble } from './engine'
 
 function App() {
   // State
@@ -21,94 +23,38 @@ function App() {
   const [boardHeight, setBoardHeight] = useState(15) // Stores the board height, starting at 15
 
 
-  // Movement function
-  const moveUp = () => { // Moves all robots upward
-    const sortedRobots = [...robots].sort((a, b) => a - b) // Processes the top robots first
-    const newRobots: number[] = [] // Stores each robot's new position
+  // Movement
+  // The rules live in src/engine, so they can be tested without the interface
+  // and checked against the TumbleTiles desktop application. The board uses
+  // flat cell numbers, so each move rebuilds an engine board, tumbles it, and
+  // reads the positions back out.
+  const applyMove = (direction: Direction) => {
+    const board = createBoard(boardWidth, boardHeight)
 
-    sortedRobots.forEach((robot) => { // Goes through each robot
-      let newPosition = robot // Starts at the robot's current position
-
-      while (
-        newPosition >= boardWidth &&
-        !walls.includes(newPosition - boardWidth) &&
-        !newRobots.includes(newPosition - boardWidth)
-      ) {
-        newPosition -= boardWidth // Moves the robot up one row based on the board width
-      }
-
-      newRobots.push(newPosition) // Saves the robot's final position
+    // Walls go on first so a robot can never be placed on top of one
+    walls.forEach((cell) => {
+      const { x, y } = fromIndex(cell, boardWidth)
+      addConcrete(board, x, y)
     })
 
-    setRobots(newRobots) // Updates the board with the new robot positions
-  }
-
-
-  const moveDown = () => { // Moves all robots downward
-    const sortedRobots = [...robots].sort((a, b) => b - a) // Processes the bottom robots first
-    const newRobots: number[] = [] // Stores each robot's new position
-
-    sortedRobots.forEach((robot) => { // Goes through each robot
-      let newPosition = robot // Starts at the robot's current position
-
-      while (
-        newPosition < boardWidth * (boardHeight - 1) &&
-        !walls.includes(newPosition + boardWidth) &&
-        !newRobots.includes(newPosition + boardWidth)
-      ) {
-        newPosition += boardWidth // Moves the robot down one row based on the board width
-      }
-
-      newRobots.push(newPosition) // Saves the robot's final position
+    robots.forEach((cell) => {
+      const { x, y } = fromIndex(cell, boardWidth)
+      addTile(board, x, y)
     })
 
-    setRobots(newRobots) // Updates the board with the new robot positions
+    tumble(board, direction)
+
+    setRobots(
+      board.polyominoes.flatMap((poly) =>
+        poly.tiles.map((tile) => toIndex(tile, boardWidth)),
+      ),
+    )
   }
 
-
-  const moveLeft = () => { // Moves all robots to the left
-    const sortedRobots = [...robots].sort((a, b) => a - b) // Processes the left robots first
-    const newRobots: number[] = [] // Stores each robot's new position
-
-    sortedRobots.forEach((robot) => { // Goes through each robot
-      let newPosition = robot // Starts at the robot's current position
-
-      while (
-        newPosition % boardWidth !== 0 &&
-        !walls.includes(newPosition - 1) &&
-        !newRobots.includes(newPosition - 1)
-      ) {
-        newPosition -= 1 // Moves the robot one cell to the left
-      }
-
-      newRobots.push(newPosition) // Saves the robot's final position
-    })
-
-    setRobots(newRobots) // Updates the board with the new robot positions
-  }
-
-
-  const moveRight = () => { // Moves all robots to the right
-    const sortedRobots = [...robots].sort((a, b) => b - a) // Processes the right robots first
-    const newRobots: number[] = [] // Stores each robot's new position
-
-    sortedRobots.forEach((robot) => { // Goes through each robot
-      let newPosition = robot // Starts at the robot's current position
-
-      while (
-        newPosition % boardWidth !== boardWidth - 1 &&
-        !walls.includes(newPosition + 1) &&
-        !newRobots.includes(newPosition + 1)
-      ) {
-        newPosition += 1 // Moves the robot one cell to the right
-      }
-
-      newRobots.push(newPosition) // Saves the robot's final position
-    })
-
-    setRobots(newRobots) // Updates the board with the new robot positions
-  }
-
+  const moveUp = () => applyMove('N') // Moves all robots upward
+  const moveDown = () => applyMove('S') // Moves all robots downward
+  const moveLeft = () => applyMove('W') // Moves all robots to the left
+  const moveRight = () => applyMove('E') // Moves all robots to the right
 
   useEffect(() => { // Listens for keyboard arrow key presses
     const handleKeyDown = (event: KeyboardEvent) => {

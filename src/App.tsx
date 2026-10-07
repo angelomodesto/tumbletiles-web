@@ -168,22 +168,22 @@ if (showTutorial) {
 
 
         {tutorialStep === 2 && (
-          <div> {/* Shows the robot instructions only during step 2 */}
+          <div> {/* Shows the wall instructions only during step 2 */}
 
-            <h2>Step 2: Place a Robot</h2>
+            <h2>Step 2: Place a Wall</h2>
 
             <p>
-              Select the Robot tool and click an empty square on the board to place a robot.
+              Select the Wall tool and click an empty square on the board to place a wall.
             </p>
 
             <div className="tutorial-tools"> {/* Practice toolbar used during the tutorial */}
               <span>[ TOOLS ]</span>
 
-              <button type="button" className="active-tool">
+              <button type="button">
                 Robot
               </button>
 
-              <button type="button">
+              <button type="button" className="active-tool">
                 Wall
               </button>
 
@@ -196,10 +196,10 @@ if (showTutorial) {
               {Array.from({ length: 25 }).map((_, index) => (
                 <div
                   key={index}
-                  className={`tutorial-cell ${tutorialRobots.includes(index) ? 'robot' : ''}`} /* Shows a robot when the cell is selected */
+                  className={`tutorial-cell ${tutorialWalls.includes(index) ? 'wall' : ''}`} // Shows a wall when the cell is selected
                   onClick={() => {
-                    if (!tutorialRobots.includes(index)) {
-                      setTutorialRobots([...tutorialRobots, index]) // Places a robot on the clicked tutorial cell
+                    if (!tutorialWalls.includes(index)) {
+                      setTutorialWalls([...tutorialWalls, index]) // Places a wall on the clicked tutorial cell
                     }
                   }}
                 ></div>
@@ -214,7 +214,7 @@ if (showTutorial) {
             </button>
             
             
-            {tutorialRobots.length > 0 && (
+            {tutorialWalls.length > 0 && (
               <button
                 type="button"
                 onClick={() => setTutorialStep(3)} /* Moves to tutorial step 3 */
@@ -227,23 +227,23 @@ if (showTutorial) {
         )}
 
         {tutorialStep === 3 && (
-          <div> {/* Shows the wall instructions only during step 3 */}
+          <div> {/* Shows the robot instructions only during step 3 */}
 
-            <h2>Step 3: Place a Wall</h2>
+            <h2>Step 3: Place a Robot</h2>
 
             <p>
-              Select the Wall tool and click an empty square on the board to place a wall.
+              Select the Robot tool and click an empty square on the board to place a robot.
             </p>
 
 
             <div className="tutorial-tools"> {/* Practice toolbar used during the tutorial */}
               <span>[ TOOLS ]</span>
 
-              <button type="button">
+              <button type="button" className="active-tool">
                 Robot
               </button>
 
-              <button type="button" className="active-tool">
+              <button type="button">
                 Wall
               </button>
 
@@ -253,14 +253,14 @@ if (showTutorial) {
             </div>
 
 
-            <div className="tutorial-board"> {/* Holds the wall practice board */}
+            <div className="tutorial-board"> {/* Holds the robot practice board */}
               {Array.from({ length: 25 }).map((_, index) => (
                 <div
                   key={index}
-                  className={`tutorial-cell ${tutorialWalls.includes(index) ? 'wall' : ''}`} /* Shows a wall when the cell is selected */
+                  className={`tutorial-cell ${tutorialRobots.includes(index) ? 'robot' : ''}`} // Shows a robot when selected
                   onClick={() => {
-                    if (!tutorialWalls.includes(index)) {
-                      setTutorialWalls([...tutorialWalls, index]) // Places a wall on the clicked tutorial cell
+                    if (!tutorialRobots.includes(index)) {
+                      setTutorialRobots([...tutorialRobots, index]) // Places a robot on the clicked tutorial cell
                     }
                   }}
                 ></div>
@@ -274,7 +274,7 @@ if (showTutorial) {
               ← Back
             </button>
 
-            {tutorialWalls.length > 0 && (
+            {tutorialRobots.length > 0 && (
               <button
                 type="button"
                 onClick={() => setTutorialStep(4)} /* Moves to tutorial step 4 */

@@ -176,6 +176,22 @@ if (showTutorial) {
               Select the Robot tool and click an empty square on the board to place a robot.
             </p>
 
+            <div className="tutorial-tools"> {/* Practice toolbar used during the tutorial */}
+              <span>[ TOOLS ]</span>
+
+              <button type="button" className="active-tool">
+                Robot
+              </button>
+
+              <button type="button">
+                Wall
+              </button>
+
+              <button type="button">
+                Erase
+              </button>
+            </div>
+
             <div className="tutorial-board"> {/* Holds the small practice board */}
               {Array.from({ length: 25 }).map((_, index) => (
                 <div
@@ -220,6 +236,23 @@ if (showTutorial) {
             </p>
 
 
+            <div className="tutorial-tools"> {/* Practice toolbar used during the tutorial */}
+              <span>[ TOOLS ]</span>
+
+              <button type="button">
+                Robot
+              </button>
+
+              <button type="button" className="active-tool">
+                Wall
+              </button>
+
+              <button type="button">
+                Erase
+              </button>
+            </div>
+
+
             <div className="tutorial-board"> {/* Holds the wall practice board */}
               {Array.from({ length: 25 }).map((_, index) => (
                 <div
@@ -262,6 +295,22 @@ if (showTutorial) {
               Select the Erase tool and click a robot or wall to remove it from the board.
             </p>
 
+            <div className="tutorial-tools"> {/* Practice toolbar used during the tutorial */}
+              <span>[ TOOLS ]</span>
+
+              <button type="button">
+                Robot
+              </button>
+
+              <button type="button">
+                Wall
+              </button>
+
+              <button type="button" className="active-tool">
+                Erase
+              </button>
+            </div>
+
             <div className="tutorial-board"> {/* Holds the erase practice board */}
               {Array.from({ length: 25 }).map((_, index) => (
                 <div
@@ -285,7 +334,7 @@ if (showTutorial) {
               ← Back
             </button>
 
-            {tutorialEraseCells.length === 0 && (
+            {tutorialEraseCells.length < 3 && (
               <button
                 type="button"
                 onClick={() => setTutorialStep(5)} /* Moves to tutorial step 5 */

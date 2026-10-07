@@ -229,6 +229,13 @@
   align-self: flex-start;
 }
 
+/* Toolbar shown during tutorial steps */
+.tutorial-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s3); /* Adds space between [ TOOLS ] and the buttons */
+}
+
 .tutorial-board {
   display: grid;
   /* The markup does not set a template here, unlike the simulator board. */

@@ -18,6 +18,53 @@ function App() {
   const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
   const [boardWidth, setBoardWidth] = useState(15) // Stores the board width, starting at 15
   const [boardHeight, setBoardHeight] = useState(15) // Stores the board height, starting at 15
+  const handleImport = async (file: File) => { // Handles the XML file selected by the user
+  const xmlText = await file.text() // Reads the file contents as text
+  const parser = new DOMParser() // Creates a parser that can read XML
+  const xmlDoc = parser.parseFromString(xmlText, 'application/xml') // Converts the text into an XML document
+  const boardSize = xmlDoc.querySelector('BoardSize') // Finds the BoardSize element in the XML
+
+  if (!boardSize) return // Stops if the XML doesn't contain a BoardSize element
+
+  const width = Number(boardSize.getAttribute('width')) // Gets the board width from XML
+  const height = Number(boardSize.getAttribute('height')) // Gets the board height from XML
+
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    return // Stops if the board dimensions are invalid
+  }
+
+  setBoardWidth(width) // Updates the simulator's board width
+  setBoardHeight(height) // Updates the simulator's board height
+
+  const tiles = xmlDoc.querySelectorAll('TileData > Tile') // Finds every placed tile in the XML
+
+  const importedRobots: number[] = [] // Stores robot positions
+  const importedWalls: number[] = [] // Stores wall positions
+
+  tiles.forEach((tile) => { // Goes through each tile in the XML
+    const location = tile.querySelector('Location') // Finds the tile's position
+
+    if (!location) return // Skips tiles without a location
+
+    const x = Number(location.getAttribute('x')) // Gets the X coordinate
+    const y = Number(location.getAttribute('y')) // Gets the Y coordinate
+
+    if (!Number.isInteger(x) || !Number.isInteger(y)) return // Skips invalid coordinates
+    if (x < 0 || x >= width || y < 0 || y >= height) return // Skips positions outside the board
+
+    const index = y * width + x // Converts X and Y into our grid's cell index
+
+    const concrete = tile.querySelector('Concrete')?.textContent?.trim() // Reads whether the tile is concrete
+
+    if (concrete === 'True') {
+      importedWalls.push(index) // Concrete tiles are walls
+    } else if (concrete === 'False') {
+      importedRobots.push(index) // Non-concrete tiles are robots
+    }
+  }) // Ends the tiles.forEach() loop
+  setRobots(importedRobots) // Places the imported robots on the board
+  setWalls(importedWalls) // Places the imported walls on the board
+} // Ends the handleImport function
 
 
   // Movement
@@ -518,6 +565,25 @@ if (showTutorial) {
           >
             Erase
           </button>
+
+          <label className="import-button">
+            Import XML
+            <input
+              type="file"
+              accept=".xml"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0] // Gets the selected file
+
+                if (file) {
+                  void handleImport(file) // Imports the XML file
+                }
+
+                e.target.value = '' // Allows selecting the same file again
+              }}
+            />
+          </label>
+          
         </div> {/* End of Tools */}
 
 

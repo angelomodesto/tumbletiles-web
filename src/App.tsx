@@ -67,6 +67,70 @@ function App() {
 } // Ends the handleImport function
 
 
+  const handleExport = () => { // Handles exporting the board as XML
+
+    const robotXML = robots.map((index) => { // Goes through every robot
+      const x = index % boardWidth // Finds the robot's X coordinate
+      const y = Math.floor(index / boardWidth) // Finds the robot's Y coordinate
+
+      return `
+        <Tile>
+          <Location x="${x}" y="${y}" />
+          <Color>85AFCD</Color>
+          <NorthGlue>0</NorthGlue>
+          <SouthGlue>0</SouthGlue>
+          <EastGlue>0</EastGlue>
+          <WestGlue>0</WestGlue>
+          <Concrete>False</Concrete>
+          <Label>0</Label>
+        </Tile>
+      ` // Creates XML for this robot
+    }).join('') // Combines all robots into one string
+
+
+    const wallXML = walls.map((index) => { // Goes through every wall
+      const x = index % boardWidth // Finds the wall's X coordinate
+      const y = Math.floor(index / boardWidth) // Finds the wall's Y coordinate
+
+      return `
+        <Tile>
+          <Location x="${x}" y="${y}" />
+          <Color>686868</Color>
+          <NorthGlue>0</NorthGlue>
+          <SouthGlue>0</SouthGlue>
+          <EastGlue>0</EastGlue>
+          <WestGlue>0</WestGlue>
+          <Concrete>True</Concrete>
+          <Label>0</Label>
+        </Tile>
+      ` // Creates XML for this wall
+    }).join('') // Combines all walls into one string
+
+
+
+    const xml = `
+      <TileConfiguration>
+        <BoardSize height="${boardHeight}" width="${boardWidth}" />
+        <TileData>
+          ${robotXML}
+          ${wallXML}
+        </TileData>
+      </TileConfiguration>
+    ` // Creates the XML with the board dimensions and robots
+
+    const blob = new Blob([xml], { type: 'application/xml' }) // Creates a file from our XML string
+    const url = URL.createObjectURL(blob) // Creates a temporary download URL
+    const link = document.createElement('a') // Creates a download link
+
+    link.href = url // Sets the file's download URL
+    link.download = 'tumbletiles-board.xml' // Names the downloaded file
+    link.click() // Downloads the XML file
+
+    URL.revokeObjectURL(url) // Cleans up the temporary URL
+
+  }
+
+
   // Movement
   // The rules live in src/engine, so they can be tested without the interface
   // and checked against the TumbleTiles desktop application. The board uses
@@ -583,7 +647,12 @@ if (showTutorial) {
               }}
             />
           </label>
-          
+
+
+          <button onClick={handleExport} className="import-button">
+            Export XML
+          </button>
+
         </div> {/* End of Tools */}
 
 

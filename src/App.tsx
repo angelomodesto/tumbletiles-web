@@ -22,6 +22,7 @@ function App() {
   const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
   const [boardWidth, setBoardWidth] = useState(15) // Stores the board width, starting at 15
   const [boardHeight, setBoardHeight] = useState(15) // Stores the board height, starting at 15
+  const [storageWidth, setStorageWidth] = useState(15) // Tracks the width used to store robot and wall positions
   const handleImport = async (file: File) => { // Handles the XML file selected by the user
   const xmlText = await file.text() // Reads the file contents as text
   const parser = new DOMParser() // Creates a parser that can read XML
@@ -38,6 +39,7 @@ function App() {
   }
 
   setBoardWidth(width) // Updates the simulator's board width
+  setStorageWidth(width) // Matches stored positions to the imported board width
   setBoardHeight(height) // Updates the simulator's board height
 
   const tiles = xmlDoc.querySelectorAll('TileData > Tile') // Finds every placed tile in the XML
@@ -56,7 +58,7 @@ function App() {
     if (!Number.isInteger(x) || !Number.isInteger(y)) return // Skips invalid coordinates
     if (x < 0 || x >= width || y < 0 || y >= height) return // Skips positions outside the board
 
-    const index = y * width + x // Converts X and Y into our grid's cell index
+    const index = y * width + x // Stores the imported object's row and column
 
     const concrete = tile.querySelector('Concrete')?.textContent?.trim() // Reads whether the tile is concrete
 
@@ -74,8 +76,8 @@ function App() {
   const handleExport = () => { // Handles exporting the board as XML
 
     const robotXML = robots.map((index) => { // Goes through every robot
-      const x = index % boardWidth // Finds the robot's X coordinate
-      const y = Math.floor(index / boardWidth) // Finds the robot's Y coordinate
+      const x = index % storageWidth // Gets the robot or wall's stored column
+      const y = Math.floor(index / storageWidth) // Gets the robot or wall's stored row
 
       return `
         <Tile>
@@ -93,8 +95,8 @@ function App() {
 
 
     const wallXML = walls.map((index) => { // Goes through every wall
-      const x = index % boardWidth // Finds the wall's X coordinate
-      const y = Math.floor(index / boardWidth) // Finds the wall's Y coordinate
+      const x = index % storageWidth // Gets the robot or wall's stored column
+      const y = Math.floor(index / storageWidth) // Gets the robot or wall's stored row
 
       return `
         <Tile>
@@ -143,24 +145,36 @@ function App() {
   const applyMove = (direction: Direction) => {
     const board = createBoard(boardWidth, boardHeight)
 
-    // Walls go on first so a robot can never be placed on top of one
     walls.forEach((cell) => {
-      const { x, y } = fromIndex(cell, boardWidth)
-      addConcrete(board, x, y)
+      const { x, y } = fromIndex(cell, storageWidth) // Gets the wall's position
+
+      if (x < boardWidth && y < boardHeight) { // Checks if wall is visible
+        addConcrete(board, x, y) // Adds visible wall to simulation
+      }
     })
 
     robots.forEach((cell) => {
-      const { x, y } = fromIndex(cell, boardWidth)
-      addTile(board, x, y)
+      const { x, y } = fromIndex(cell, storageWidth) // Gets the robot's position
+
+      if (x < boardWidth && y < boardHeight) { // Checks if robot is visible
+        addTile(board, x, y) // Adds visible robot to simulation
+      }
     })
 
     tumble(board, direction)
 
-    setRobots(
-      board.polyominoes.flatMap((poly) =>
-        poly.tiles.map((tile) => toIndex(tile, boardWidth)),
+    setRobots([
+      // Keeps robots outside the visible board in their original positions
+      ...robots.filter((cell) => {
+        const { x, y } = fromIndex(cell, storageWidth)
+        return x >= boardWidth || y >= boardHeight
+      }),
+
+      // Saves moved robots using the storage width
+      ...board.polyominoes.flatMap((poly) =>
+        poly.tiles.map((tile) => toIndex(tile, storageWidth)),
       ),
-    )
+    ])
   }
 
   const moveUp = () => applyMove('N') // Moves all robots upward
@@ -781,7 +795,32 @@ if (showTutorial) {
             <input
               type="number"
               value={boardWidth}
-              onChange={(event) => setBoardWidth(Number(event.target.value))}
+              onChange={(event) => {
+                const newWidth = Number(event.target.value) // Gets the new width
+
+                if (!Number.isInteger(newWidth) || newWidth < 1) return // Prevents invalid widths
+
+                const newStorageWidth = Math.max(storageWidth, newWidth) // Keeps space for hidden objects
+
+                // Updates robot positions using the storage width
+                setRobots(robots.map((index) => {
+                  const x = index % storageWidth // Original column
+                  const y = Math.floor(index / storageWidth) // Original row
+
+                  return y * newStorageWidth + x // Preserves the original coordinates
+                }))
+
+                // Updates wall positions using the storage width
+                setWalls(walls.map((index) => {
+                  const x = index % storageWidth // Original column
+                  const y = Math.floor(index / storageWidth) // Original row
+
+                  return y * newStorageWidth + x // Preserves the original coordinates
+                }))
+
+                setStorageWidth(newStorageWidth) // Updates the storage width
+                setBoardWidth(newWidth) // Updates the visible width
+              }}
             />
           </label>
 
@@ -790,7 +829,13 @@ if (showTutorial) {
             <input
               type="number"
               value={boardHeight}
-              onChange={(event) => setBoardHeight(Number(event.target.value))}
+              onChange={(event) => {
+                const newHeight = Number(event.target.value) // Gets the new height
+
+                if (!Number.isInteger(newHeight) || newHeight < 1) return // Prevents invalid heights
+
+                setBoardHeight(newHeight) // Changes height without deleting robots or walls
+              }}
             />
           </label>
 
@@ -820,20 +865,30 @@ if (showTutorial) {
           > 
             {Array.from({ length:  boardWidth * boardHeight }).map((_, index) => (
               <div 
-                className={`board-cell ${robots.includes(index) ? 'robot' : ''} ${walls.includes(index) ? 'wall' : ''}`} /* Adds robot or wall style to the cell */
+                className={`board-cell ${
+                  robots.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)) ? 'robot' : ''
+                } ${
+                  walls.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)) ? 'wall' : ''
+                }`}
                 key={index}
                 onClick={() => {
-                  if (selectedTool === 'robot' && !robots.includes(index) && !walls.includes(index)) {
-                    setRobots([...robots, index]) // Places a robot only if the cell is empty
+                  // Converts the clicked square into its stored position
+                  const storedIndex = Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)
+
+                  // Places a robot only if the square is empty
+                  if (selectedTool === 'robot' && !robots.includes(storedIndex) && !walls.includes(storedIndex)) {
+                    setRobots([...robots, storedIndex]) // Saves the robot at its stored position
                   }
 
-                  if (selectedTool === 'wall' && !walls.includes(index) && !robots.includes(index)) {
-                    setWalls([...walls, index]) // Places a wall only if the cell is empty
+                  // Places a wall only if the stored square is empty
+                  if (selectedTool === 'wall' && !walls.includes(storedIndex) && !robots.includes(storedIndex)) {
+                    setWalls([...walls, storedIndex]) // Saves the wall at its stored position
                   }
 
+                  // Erases a robot or wall from the clicked square
                   if (selectedTool === 'erase') {
-                    setRobots(robots.filter((robot) => robot !== index)) // Removes a robot from the clicked cell
-                    setWalls(walls.filter((wall) => wall !== index)) // Removes a wall from the clicked cell
+                    setRobots(robots.filter((robot) => robot !== storedIndex)) // Removes the robot
+                    setWalls(walls.filter((wall) => wall !== storedIndex)) // Removes the wall
                   }
                 }}
               ></div> /* Creates one square for the board */

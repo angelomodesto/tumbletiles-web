@@ -373,8 +373,6 @@ if (showTutorial) {
               <button
                 type="button"
                 onClick={() => {
-                  setTutorialRobots([]) // Clears robots from Step 2
-                  setTutorialWalls([]) // Clears walls from Step 2
                   setTutorialStep(3) // Moves to Step 3
                 }}
               >
@@ -450,8 +448,6 @@ if (showTutorial) {
             <button
               type="button"
               onClick={() => {
-                setTutorialRobots([]) // Clears robots from Step 3
-                setTutorialWalls([]) // Clears walls from Step 3
                 setTutorialStep(2) // Returns to Step 2
               }}
             >
@@ -462,8 +458,6 @@ if (showTutorial) {
               <button
                 type="button"
                 onClick={() => {
-                  setTutorialRobots([]) // Clears robots from Step 3
-                  setTutorialWalls([]) // Clears walls from Step 3
                   setTutorialStep(4) // Moves to Step 4
                 }}
               >
@@ -550,9 +544,7 @@ if (showTutorial) {
             <button
               type="button"
               onClick={() => {
-                setTutorialRobots([]) // Clears robots from Step 4
-                setTutorialWalls([]) // Clears walls from Step 4
-                setTutorialEraseCells([6, 12, 18]) // Restores the three practice robots
+                setTutorialEraseCells([6, 12, 18]) // Restores the erase practice robots
                 setTutorialStep(3) // Returns to Step 3
               }}
             >
@@ -563,8 +555,6 @@ if (showTutorial) {
               <button
                 type="button"
                 onClick={() => {
-                  setTutorialRobots([]) // Clears robots from Step 4
-                  setTutorialWalls([]) // Clears walls from Step 4
                   setTutorialStep(5) // Moves to Step 5
                 }}
               >
@@ -642,8 +632,6 @@ if (showTutorial) {
             <button
               type="button"
               onClick={() => {
-                setTutorialRobots([]) // Clears extra robots
-                setTutorialWalls([]) // Clears extra walls
                 setTutorialEraseCells([6, 12, 18]) // Restores the three practice robots
                 setTutorialStep(4) // Returns to Step 4
               }}

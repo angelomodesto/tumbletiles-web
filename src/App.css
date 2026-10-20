@@ -449,3 +449,51 @@
   height: 100%;
   background: var(--ink);
 }
+
+/* ---------- Presets ---------- */
+
+.board-presets {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--strip);
+  border: 1px solid var(--line-soft);
+  padding: var(--s3) var(--s4);
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.board-presets h2 {
+  min-width: 120px;
+  color: var(--ink-muted);
+}
+
+.board-presets select {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: var(--s2);
+  max-width: 420px;
+}
+
+.board-presets-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+/* Shown when a file or preset cannot be loaded. */
+.board-error {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  padding: var(--s3) var(--s4);
+  font-size: 14px;
+  color: var(--ink);
+}

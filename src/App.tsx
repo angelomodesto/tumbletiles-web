@@ -6,8 +6,26 @@ import TutorialBoard from './TutorialBoard.tsx'
 import { TOOLS, TUTORIAL_SIZE } from './tutorialTools'
 import type { Tool } from './tutorialTools'
 import { cellSizeFor } from './boardLayout'
-import type { Direction } from './engine'
-import { addConcrete, addTile, createBoard, fromIndex, toIndex, tumble } from './engine'
+import type { Configuration } from './engine/xml'
+import {
+  configurationToBoard,
+  parseConfiguration,
+  robotCells,
+  serializeConfiguration,
+  wallCells,
+} from './engine/xml'
+import type { Preset } from './presets'
+import { loadPresetIndex } from './presets'
+import type { Direction, GlueFunction, Glues } from './engine'
+import {
+  DEFAULT_GLUE_FUNCTION,
+  addConcrete,
+  addTile,
+  createBoard,
+  fromIndex,
+  toIndex,
+  tumble,
+} from './engine'
 
 /**
  * Largest board we will render. 100 matches the desktop application's default
@@ -38,126 +56,64 @@ function App() {
     width: typeof window === 'undefined' ? 1200 : window.innerWidth,
     height: typeof window === 'undefined' ? 800 : window.innerHeight,
   })) // Tracks the window size so the board can be sized to fit it
+  const [tileGlues, setTileGlues] = useState<Record<number, Glues>>({}) // Glue labels for each robot, kept so constructions hold together
+  const [glueFunction, setGlueFunction] = useState<GlueFunction>(DEFAULT_GLUE_FUNCTION) // How strongly each glue label bonds
+  const [presets, setPresets] = useState<Preset[]>([]) // The configurations that ship with the simulator
+  const [loadError, setLoadError] = useState('') // Explains why a file or preset could not be loaded
   const [widthText, setWidthText] = useState('15') // What the width field shows while it is being typed in
   const [heightText, setHeightText] = useState('15') // What the height field shows while it is being typed in
-  const handleImport = async (file: File) => { // Handles the XML file selected by the user
-  const xmlText = await file.text() // Reads the file contents as text
-  const parser = new DOMParser() // Creates a parser that can read XML
-  const xmlDoc = parser.parseFromString(xmlText, 'application/xml') // Converts the text into an XML document
-  const boardSize = xmlDoc.querySelector('BoardSize') // Finds the BoardSize element in the XML
+  /** Loads a parsed configuration onto the simulator board. */
+  const loadConfiguration = (config: Configuration) => {
+    const board = configurationToBoard(config)
 
-  if (!boardSize) return // Stops if the XML doesn't contain a BoardSize element
+    setBoardWidth(config.cols)
+    setBoardHeight(config.rows)
+    setStorageWidth(config.cols)
+    setWidthText(String(config.cols))
+    setHeightText(String(config.rows))
+    setRobots(robotCells(board))
+    setWalls(wallCells(board))
+    setGlueFunction(config.glueFunction)
 
-  const width = Number(boardSize.getAttribute('width')) // Gets the board width from XML
-  const height = Number(boardSize.getAttribute('height')) // Gets the board height from XML
-
-  if (
-    !Number.isInteger(width) ||
-    !Number.isInteger(height) ||
-    width <= 0 ||
-    height <= 0 ||
-    width > MAX_BOARD_SIZE ||
-    height > MAX_BOARD_SIZE
-  ) {
-    return // Stops if the board dimensions are invalid
+    // Glues are kept per cell so a construction still holds together when moved.
+    const glues: Record<number, Glues> = {}
+    for (const poly of board.polyominoes) {
+      for (const tile of poly.tiles) glues[toIndex(tile, board.cols)] = tile.glues
+    }
+    setTileGlues(glues)
+    setLoadError('')
   }
 
-  setBoardWidth(width) // Updates the simulator's board width
-  setStorageWidth(width) // Matches stored positions to the imported board width
-  setBoardHeight(height) // Updates the simulator's board height
-  setWidthText(String(width)) // Keeps the width field showing the imported size
-  setHeightText(String(height)) // Keeps the height field showing the imported size
-
-  const tiles = xmlDoc.querySelectorAll('TileData > Tile') // Finds every placed tile in the XML
-
-  const importedRobots: number[] = [] // Stores robot positions
-  const importedWalls: number[] = [] // Stores wall positions
-
-  tiles.forEach((tile) => { // Goes through each tile in the XML
-    const location = tile.querySelector('Location') // Finds the tile's position
-
-    if (!location) return // Skips tiles without a location
-
-    const x = Number(location.getAttribute('x')) // Gets the X coordinate
-    const y = Number(location.getAttribute('y')) // Gets the Y coordinate
-
-    if (!Number.isInteger(x) || !Number.isInteger(y)) return // Skips invalid coordinates
-    if (x < 0 || x >= width || y < 0 || y >= height) return // Skips positions outside the board
-
-    const index = y * width + x // Stores the imported object's row and column
-
-    const concrete = tile.querySelector('Concrete')?.textContent?.trim() // Reads whether the tile is concrete
-
-    if (concrete === 'True') {
-      importedWalls.push(index) // Concrete tiles are walls
-    } else if (concrete === 'False') {
-      importedRobots.push(index) // Non-concrete tiles are robots
+  const handleImport = async (file: File) => { // Handles the XML file selected by the user
+    try {
+      loadConfiguration(parseConfiguration(await file.text()))
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'That file could not be read.')
     }
-  }) // Ends the tiles.forEach() loop
-  setRobots(importedRobots) // Places the imported robots on the board
-  setWalls(importedWalls) // Places the imported walls on the board
-} // Ends the handleImport function
+  }
 
+  /** Loads one of the configurations that ship with the simulator. */
+  const handleLoadPreset = async (preset: Preset) => {
+    setLoadError('')
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL}presets/${preset.file}`)
+      if (!response.ok) throw new Error(`Could not fetch ${preset.file}.`)
+      loadConfiguration(parseConfiguration(await response.text()))
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'That preset could not be loaded.')
+    }
+  }
 
   const handleExport = () => { // Handles exporting the board as XML
-
-    // Hidden objects sit outside the visible board, so they are left out of the
-    // file. Exporting them would write coordinates past BoardSize, and the
-    // importer would then discard them, losing data on a round trip.
-    const isVisible = (index: number) => {
-      const x = index % storageWidth
-      const y = Math.floor(index / storageWidth)
-      return x < boardWidth && y < boardHeight
-    }
-
-    const robotXML = robots.filter(isVisible).map((index) => { // Goes through every visible robot
-      const x = index % storageWidth // Gets the robot's stored column
-      const y = Math.floor(index / storageWidth) // Gets the robot's stored row
-
-      return `
-        <Tile>
-          <Location x="${x}" y="${y}" />
-          <Color>85AFCD</Color>
-          <NorthGlue>0</NorthGlue>
-          <SouthGlue>0</SouthGlue>
-          <EastGlue>0</EastGlue>
-          <WestGlue>0</WestGlue>
-          <Concrete>False</Concrete>
-          <Label>0</Label>
-        </Tile>
-      ` // Creates XML for this robot
-    }).join('') // Combines all robots into one string
-
-
-    const wallXML = walls.filter(isVisible).map((index) => { // Goes through every visible wall
-      const x = index % storageWidth // Gets the wall's stored column
-      const y = Math.floor(index / storageWidth) // Gets the wall's stored row
-
-      return `
-        <Tile>
-          <Location x="${x}" y="${y}" />
-          <Color>686868</Color>
-          <NorthGlue>0</NorthGlue>
-          <SouthGlue>0</SouthGlue>
-          <EastGlue>0</EastGlue>
-          <WestGlue>0</WestGlue>
-          <Concrete>True</Concrete>
-          <Label>0</Label>
-        </Tile>
-      ` // Creates XML for this wall
-    }).join('') // Combines all walls into one string
-
-
-
-    const xml = `
-      <TileConfiguration>
-        <BoardSize height="${boardHeight}" width="${boardWidth}" />
-        <TileData>
-          ${robotXML}
-          ${wallXML}
-        </TileData>
-      </TileConfiguration>
-    ` // Creates the XML with the board dimensions and robots
+    const xml = serializeConfiguration(
+      boardWidth,
+      boardHeight,
+      [
+        ...robots.map((cell) => ({ cell, isConcrete: false, glues: tileGlues[cell] })),
+        ...walls.map((cell) => ({ cell, isConcrete: true })),
+      ],
+      storageWidth,
+    )
 
     const blob = new Blob([xml], { type: 'application/xml' }) // Creates a file from our XML string
     const url = URL.createObjectURL(blob) // Creates a temporary download URL
@@ -168,7 +124,6 @@ function App() {
     link.click() // Downloads the XML file
 
     URL.revokeObjectURL(url) // Cleans up the temporary URL
-
   }
 
 
@@ -210,6 +165,11 @@ function App() {
     setTutorialHasMoved(true) // Records that the step is done
   }
 
+  // Reads the list of bundled configurations once, when the app starts.
+  useEffect(() => {
+    loadPresetIndex().then(setPresets).catch(() => setPresets([]))
+  }, [])
+
   // Keeps the board sized to the window as it changes.
   useEffect(() => {
     const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
@@ -225,6 +185,7 @@ function App() {
   const applyMove = (direction: Direction) => {
     const board = createBoard(boardWidth, boardHeight)
 
+    // Walls go on first so a robot can never be placed on top of one
     walls.forEach((cell) => {
       const { x, y } = fromIndex(cell, storageWidth) // Gets the wall's position
 
@@ -237,24 +198,29 @@ function App() {
       const { x, y } = fromIndex(cell, storageWidth) // Gets the robot's position
 
       if (x < boardWidth && y < boardHeight) { // Checks if robot is visible
-        addTile(board, x, y) // Adds visible robot to simulation
+        addTile(board, x, y, tileGlues[cell]) // Keeps the robot's glues, so bonded shapes stay bonded
       }
     })
 
-    tumble(board, direction)
+    tumble(board, direction, { glueFunction })
 
-    setRobots([
-      // Keeps robots outside the visible board in their original positions
-      ...robots.filter((cell) => {
-        const { x, y } = fromIndex(cell, storageWidth)
-        return x >= boardWidth || y >= boardHeight
-      }),
+    // Robots outside the visible board keep their positions and their glues.
+    const hidden = robots.filter((cell) => {
+      const { x, y } = fromIndex(cell, storageWidth)
+      return x >= boardWidth || y >= boardHeight
+    })
 
-      // Saves moved robots using the storage width
-      ...board.polyominoes.flatMap((poly) =>
-        poly.tiles.map((tile) => toIndex(tile, storageWidth)),
-      ),
-    ])
+    const moved = board.polyominoes.flatMap((poly) => poly.tiles)
+    const glues: Record<number, Glues> = {}
+    for (const cell of hidden) {
+      if (tileGlues[cell] !== undefined) glues[cell] = tileGlues[cell]
+    }
+    for (const tile of moved) {
+      glues[toIndex(tile, storageWidth)] = tile.glues
+    }
+
+    setRobots([...hidden, ...moved.map((tile) => toIndex(tile, storageWidth))])
+    setTileGlues(glues)
   }
 
   const moveUp = () => applyMove('N') // Moves all robots upward
@@ -674,6 +640,38 @@ if (showTutorial) {
           </button>
 
         </div> {/* End of Tools */}
+
+
+        {presets.length > 0 && (
+          <div className="board-presets"> {/* Configurations that ship with the simulator */}
+            <h2>Presets</h2>
+
+            <select
+              value=""
+              onChange={(event) => {
+                const preset = presets.find((item) => item.id === event.target.value)
+                if (preset !== undefined) void handleLoadPreset(preset)
+              }}
+            >
+              <option value="">Choose a configuration…</option>
+              {presets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name} — {preset.cols}x{preset.rows}, {preset.robots} robots
+                </option>
+              ))}
+            </select>
+
+            <span className="board-presets-note">
+              From the research group's verification set.
+            </span>
+          </div>
+        )}
+
+        {loadError !== '' && (
+          <p className="board-error" role="alert">
+            {loadError}
+          </p>
+        )}
 
 
 

@@ -1,0 +1,81 @@
+{
+  "presets": [
+    {
+      "id": "Cat",
+      "name": "Cat",
+      "file": "Cat.xml",
+      "cols": 45,
+      "rows": 45,
+      "robots": 61,
+      "walls": 130,
+      "bytes": 38521,
+      "description": "A cat shape built from glued tiles."
+    },
+    {
+      "id": "Cat2",
+      "name": "Cat2",
+      "file": "Cat2.xml",
+      "cols": 75,
+      "rows": 75,
+      "robots": 280,
+      "walls": 480,
+      "bytes": 149701,
+      "description": "A larger cat shape on a 75 by 75 board."
+    },
+    {
+      "id": "Reconfiguration",
+      "name": "Reconfiguration",
+      "file": "Reconfiguration.xml",
+      "cols": 58,
+      "rows": 58,
+      "robots": 5,
+      "walls": 776,
+      "bytes": 151515,
+      "description": "A reconfiguration instance used to verify the model."
+    },
+    {
+      "id": "ReconfigurationEmpty",
+      "name": "Reconfiguration Empty",
+      "file": "ReconfigurationEmpty.xml",
+      "cols": 58,
+      "rows": 58,
+      "robots": 0,
+      "walls": 776,
+      "bytes": 150548,
+      "description": "The same reconfiguration board with the tiles cleared."
+    },
+    {
+      "id": "Relocation",
+      "name": "Relocation",
+      "file": "Relocation.xml",
+      "cols": 58,
+      "rows": 58,
+      "robots": 5,
+      "walls": 590,
+      "bytes": 115664,
+      "description": "A relocation instance used to verify the model."
+    },
+    {
+      "id": "RelocationEmpty",
+      "name": "Relocation Empty",
+      "file": "RelocationEmpty.xml",
+      "cols": 58,
+      "rows": 58,
+      "robots": 0,
+      "walls": 590,
+      "bytes": 114693,
+      "description": "The same relocation board with the tiles cleared."
+    },
+    {
+      "id": "Shuriken",
+      "name": "Shuriken",
+      "file": "Shuriken.xml",
+      "cols": 100,
+      "rows": 100,
+      "robots": 18,
+      "walls": 1283,
+      "bytes": 252031,
+      "description": "A shuriken shape on a full 100 by 100 board."
+    }
+  ]
+}

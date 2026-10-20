@@ -21,6 +21,15 @@ Goals:
 
 Built as a CSCI 4390 Senior Project at UTRGV.
 
+## Preset configurations
+
+The simulator ships with board configurations from the research group's
+verification set, loaded from the Presets control in the simulator. They are
+copied from the `Verification/` directory of
+[ButterM-40/TumbleTiles](https://github.com/ButterM-40/TumbleTiles), and all
+credit for them belongs to their authors. See `public/presets/NOTICE.md` for
+details and for the one configuration that was left out.
+
 ## Requirements
 
 **Node `^22.12.0 || ^24.0.0 || >=26.0.0`.** This is not advisory - on older

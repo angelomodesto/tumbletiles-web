@@ -6,6 +6,11 @@ import { addConcrete, addTile, createBoard, step, toIndex } from '../engine'
  * player can render them with the same grid the simulator uses.
  */
 export interface Frame {
+  /**
+   * Which step this frame belongs to. The player advances within a step on its
+   * own and then waits, so the viewer can study each stage before moving on.
+   */
+  step: number
   robots: number[]
   walls: number[]
   /** The command being applied, or null while the board is being built. */
@@ -75,11 +80,13 @@ export function buildDemoFrames(script: DemoScript = DEMO_SCRIPT): Frame[] {
   const board = createBoard(script.cols, script.rows)
   const frames: Frame[] = []
 
+  // Step 0: the empty board.
   frames.push({
+    step: 0,
     robots: [],
     walls: [],
     direction: null,
-    caption: 'An empty board.',
+    caption: 'This is the board. Robots move on it; walls do not.',
     hold: 700,
   })
 
@@ -87,11 +94,12 @@ export function buildDemoFrames(script: DemoScript = DEMO_SCRIPT): Frame[] {
   for (const wall of script.walls) {
     addConcrete(board, wall.x, wall.y)
     frames.push({
+      step: 1,
       robots: robotsOf(board),
       walls: wallsOf(board),
       direction: null,
-      caption: 'Walls stay fixed in place.',
-      hold: 260,
+      caption: 'Walls are placed first. They never move.',
+      hold: 300,
     })
   }
 
@@ -99,60 +107,57 @@ export function buildDemoFrames(script: DemoScript = DEMO_SCRIPT): Frame[] {
   for (const robot of script.robots) {
     addTile(board, robot.x, robot.y)
     frames.push({
+      step: 2,
       robots: robotsOf(board),
       walls: wallsOf(board),
       direction: null,
-      caption: 'Robots can be moved.',
-      hold: 260,
+      caption: 'Now the robots. There is no way to move just one of them.',
+      hold: 300,
     })
   }
 
-  frames.push({
-    robots: robotsOf(board),
-    walls: wallsOf(board),
-    direction: null,
-    caption: 'Every command moves all robots at once.',
-    hold: 900,
-  })
+  // One step per command: the arrow lights up, then every robot slides.
+  let stepNumber = 3
 
-  // Each command: hold on the arrow, then one frame per step of movement.
   for (const direction of script.commands) {
     const name = DIRECTION_NAMES[direction]
 
     frames.push({
+      step: stepNumber,
       robots: robotsOf(board),
       walls: wallsOf(board),
       direction,
-      caption: 'Command: ' + name + '.',
-      hold: 650,
+      caption: 'Command: ' + name + '. Watch every robot move at once.',
+      hold: 700,
     })
 
     while (step(board, direction)) {
       frames.push({
+        step: stepNumber,
         robots: robotsOf(board),
         walls: wallsOf(board),
         direction,
         caption: 'Every robot slides ' + name + '.',
-        hold: 150,
+        hold: 170,
       })
     }
 
     frames.push({
+      step: stepNumber,
       robots: robotsOf(board),
       walls: wallsOf(board),
       direction,
-      caption: 'They stop at a wall, an edge, or another robot.',
-      hold: 800,
+      caption: 'Each one stops at a wall, an edge, or another robot.',
+      hold: 600,
     })
+
+    stepNumber++
   }
 
-  frames.push({
-    robots: robotsOf(board),
-    walls: wallsOf(board),
-    direction: null,
-    caption: 'Now try it yourself.',
-    hold: 900,
-  })
-
   return frames
+}
+
+/** How many steps the demo has. The player uses this for its progress and buttons. */
+export function countSteps(frames: Frame[]): number {
+  return frames[frames.length - 1].step + 1
 }

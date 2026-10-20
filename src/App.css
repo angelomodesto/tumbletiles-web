@@ -309,10 +309,11 @@
 }
 
 .demo-caption {
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--ink-muted);
-  min-height: 20px; /* Holds its line so the board does not jump between captions */
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--ink);
+  max-width: 620px;
+  min-height: 54px; /* Reserves two lines so the board does not jump between captions */
 }
 
 .demo-stage {
@@ -331,8 +332,8 @@
 /* The arrows sit in a cross, matching the simulator's movement controls. */
 .demo-arrows {
   display: grid;
-  grid-template-columns: repeat(3, 34px);
-  grid-template-rows: repeat(2, 34px);
+  grid-template-columns: repeat(3, 44px);
+  grid-template-rows: repeat(2, 44px);
   gap: var(--s1);
 }
 
@@ -341,10 +342,21 @@
   align-items: center;
   justify-content: center;
   font-family: var(--mono);
-  font-size: 15px;
+  font-size: 20px;
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
+}
+
+/*
+ * The arrow for the command being applied. Two classes beat the one in
+ * .active-tool, so this wins wherever it sits in the file; relying on
+ * .active-tool alone meant .demo-arrow's own background painted over it and the
+ * highlight never appeared.
+ */
+.demo-arrow.active-tool {
+  background: var(--ink);
+  color: var(--surface);
 }
 
 /* Up sits above, the other three in a row beneath it. */
@@ -366,6 +378,30 @@
 .demo-arrow:nth-child(4) {
   grid-column: 3;
   grid-row: 2;
+}
+
+.demo-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.demo-controls button {
+  font-size: 13px;
+  padding: var(--s3) var(--s4);
+}
+
+.demo-controls button:disabled {
+  color: var(--ink-muted);
+  border-color: var(--line-soft);
+  cursor: not-allowed;
+}
+
+.demo-step-count {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-muted);
 }
 
 .demo-progress {

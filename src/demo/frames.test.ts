@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { addConcrete, addTile, createBoard, toIndex, tumble } from '../engine'
-import { DEMO_SCRIPT, buildDemoFrames } from './frames'
+import { DEMO_SCRIPT, buildDemoFrames, countSteps } from './frames'
 
 const frames = buildDemoFrames()
 
@@ -111,5 +111,48 @@ describe('the demo board teaches both stopping rules', () => {
       neighbours(robot).some((cell) => robots.has(cell)),
     )
     expect(touching).toBe(true)
+  })
+})
+
+describe('frames are grouped into steps the viewer advances through', () => {
+  it('numbers every frame and never goes backwards', () => {
+    for (let i = 1; i < frames.length; i++) {
+      expect(frames[i].step).toBeGreaterThanOrEqual(frames[i - 1].step)
+    }
+  })
+
+  it('starts at step 0 and counts one step per stage', () => {
+    expect(frames[0].step).toBe(0)
+    // empty board, walls, robots, then one per command
+    expect(countSteps(frames)).toBe(3 + DEMO_SCRIPT.commands.length)
+  })
+
+  it('shows the board being built before any command', () => {
+    const buildSteps = frames.filter((frame) => frame.step <= 2)
+    for (const frame of buildSteps) expect(frame.direction).toBeNull()
+  })
+
+  it('gives each command its own step, highlighted throughout', () => {
+    DEMO_SCRIPT.commands.forEach((direction, i) => {
+      const stepFrames = frames.filter((frame) => frame.step === 3 + i)
+      expect(stepFrames.length).toBeGreaterThan(1)
+      for (const frame of stepFrames) expect(frame.direction).toBe(direction)
+    })
+  })
+
+  it('leaves each command step on a settled board, not mid-slide', () => {
+    // The last frame of a command's step must equal the first frame of the next
+    // step, so pausing there shows a finished move.
+    for (let i = 0; i < DEMO_SCRIPT.commands.length - 1; i++) {
+      const thisStep = frames.filter((frame) => frame.step === 3 + i)
+      const nextStep = frames.filter((frame) => frame.step === 4 + i)
+      expect(thisStep[thisStep.length - 1].robots).toEqual(nextStep[0].robots)
+    }
+  })
+
+  it('has every step reachable by its number', () => {
+    for (let step = 0; step < countSteps(frames); step++) {
+      expect(frames.some((frame) => frame.step === step)).toBe(true)
+    }
   })
 })

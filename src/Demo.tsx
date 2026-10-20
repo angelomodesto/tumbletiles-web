@@ -1,54 +1,57 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Direction } from './engine'
-import { DEMO_SCRIPT, buildDemoFrames } from './demo/frames'
+import { DEMO_SCRIPT, buildDemoFrames, countSteps } from './demo/frames'
 
-/** The arrows, in the order the simulator shows them. */
-const ARROWS: { direction: Direction; glyph: string }[] = [
-  { direction: 'N', glyph: '↑' },
-  { direction: 'W', glyph: '←' },
-  { direction: 'S', glyph: '↓' },
-  { direction: 'E', glyph: '→' },
+/** The arrows, laid out as a cross like the simulator's movement controls. */
+const ARROWS: { direction: Direction; glyph: string; label: string }[] = [
+  { direction: 'N', glyph: '↑', label: 'up' },
+  { direction: 'W', glyph: '←', label: 'left' },
+  { direction: 'S', glyph: '↓', label: 'down' },
+  { direction: 'E', glyph: '→', label: 'right' },
 ]
 
 interface DemoProps {
-  /** Called when the animation finishes or the viewer skips it. */
+  /** Called when the viewer chooses to continue, or skips. */
   onDone: () => void
 }
 
 /**
- * Plays the demo: the board is built, then each command is applied while the
- * matching arrow lights up. The frames come from the real engine, so what is
- * on screen is the model running, not an imitation of it.
+ * Walks through the model one step at a time. Within a step the robots slide by
+ * themselves so the movement is visible, then it waits for the viewer. The
+ * frames come from the real engine, so this is the model running rather than an
+ * imitation of it.
  */
 function Demo({ onDone }: DemoProps) {
   const frames = useMemo(() => buildDemoFrames(), [])
+  const stepCount = useMemo(() => countSteps(frames), [frames])
   const [index, setIndex] = useState(0)
-  const onDoneRef = useRef(onDone)
-
-  // Kept in a ref so restarting the timer does not depend on the callback's identity.
-  useEffect(() => {
-    onDoneRef.current = onDone
-  }, [onDone])
 
   const reducedMotion =
     typeof window !== 'undefined' &&
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 
+  const currentStep = frames[index].step
+  const lastOfStep = frames.findLastIndex((f) => f.step === currentStep)
+
+  // With reduced motion the step's finished state is shown straight away rather
+  // than animated, so this is derived during render instead of being stepped.
+  const frame = reducedMotion ? frames[lastOfStep] : frames[index]
+  const atStepEnd = reducedMotion || index >= lastOfStep
+  const isFinalStep = currentStep >= stepCount - 1
+
+  // Play through the current step, then hold until the viewer advances.
   useEffect(() => {
-    if (index >= frames.length - 1) {
-      // Hold the last frame briefly, then hand over to the tutorial.
-      const done = setTimeout(() => onDoneRef.current(), 1200)
-      return () => clearTimeout(done)
-    }
+    if (atStepEnd) return
+    const timer = setTimeout(() => setIndex((current) => current + 1), frames[index].hold)
+    return () => clearTimeout(timer)
+  }, [index, atStepEnd, frames])
 
-    // With reduced motion, skip the per-step frames and only pause on the
-    // frames that change what is being explained.
-    const hold = reducedMotion ? Math.min(frames[index].hold, 120) : frames[index].hold
-    const next = setTimeout(() => setIndex((current) => current + 1), hold)
-    return () => clearTimeout(next)
-  }, [index, frames, reducedMotion])
+  /** Jumps to the first frame of a step. */
+  const goToStep = (step: number) => {
+    const target = frames.findIndex((f) => f.step === step)
+    if (target >= 0) setIndex(target)
+  }
 
-  const frame = frames[index]
   const cells = DEMO_SCRIPT.cols * DEMO_SCRIPT.rows
   const robots = new Set(frame.robots)
   const walls = new Set(frame.walls)
@@ -78,28 +81,61 @@ function Demo({ onDone }: DemoProps) {
           ))}
         </div>
 
-        <div className="demo-arrows" aria-hidden="true">
-          {ARROWS.map(({ direction, glyph }) => (
-            <span
-              key={direction}
-              className={'demo-arrow' + (frame.direction === direction ? ' active-tool' : '')}
-            >
-              {glyph}
-            </span>
-          ))}
+        <div className="demo-arrows">
+          {ARROWS.map(({ direction, glyph, label }) => {
+            const active = frame.direction === direction
+            return (
+              <span
+                key={direction}
+                className={'demo-arrow' + (active ? ' active-tool' : '')}
+                aria-label={active ? 'applying ' + label : undefined}
+              >
+                {glyph}
+              </span>
+            )
+          })}
         </div>
       </div>
 
       <div className="demo-progress">
         <span
           className="demo-progress-bar"
-          style={{ width: `${Math.round(((index + 1) / frames.length) * 100)}%` }}
+          style={{ width: `${Math.round(((currentStep + 1) / stepCount) * 100)}%` }}
         ></span>
       </div>
 
-      <button type="button" onClick={onDone}>
-        Skip →
-      </button>
+      <div className="demo-controls">
+        <button type="button" disabled={currentStep === 0} onClick={() => goToStep(currentStep - 1)}>
+          ← Back
+        </button>
+
+        {isFinalStep ? (
+          <>
+            <button type="button" onClick={() => goToStep(0)}>
+              ↻ Replay
+            </button>
+            <button type="button" className="tutorial-button" onClick={onDone}>
+              Continue →
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="tutorial-button"
+            onClick={() => goToStep(currentStep + 1)}
+          >
+            Next →
+          </button>
+        )}
+
+        <button type="button" onClick={onDone}>
+          Skip
+        </button>
+      </div>
+
+      <p className="demo-step-count">
+        Step {currentStep + 1} of {stepCount}
+      </p>
     </div>
   )
 }

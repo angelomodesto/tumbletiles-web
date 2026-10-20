@@ -1,6 +1,11 @@
-import { useEffect, useState } from 'react' // Lets the page use state and respond to keyboard controls
+import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react' // Lets the page use state and respond to keyboard controls
 import './App.css'
 import Demo from './Demo.tsx'
+import TutorialBoard from './TutorialBoard.tsx'
+import { TOOLS, TUTORIAL_SIZE } from './tutorialTools'
+import type { Tool } from './tutorialTools'
+import { cellSizeFor } from './boardLayout'
 import type { Direction } from './engine'
 import { addConcrete, addTile, createBoard, fromIndex, toIndex, tumble } from './engine'
 
@@ -16,14 +21,12 @@ function App() {
   const [showTutorial, setShowTutorial] = useState(false) // Tracks whether the tutorial should be shown
   const [showDemo, setShowDemo] = useState(false) // Tracks whether the opening animation should be shown
   const [tutorialStep, setTutorialStep] = useState(1) // Tracks which tutorial step the user is currently on
-  const [tutorialTool, setTutorialTool] = useState('wall') // Tracks which tool is selected during the tutorial
+  const [tutorialTool, setTutorialTool] = useState<Tool>('wall') // Tracks which tool is selected during the tutorial
   const [tutorialWallPlaced, setTutorialWallPlaced] = useState(false) // Remembers if the user has placed a wall
   const [tutorialRobotPlaced, setTutorialRobotPlaced] = useState(false) // Remembers if the user has placed a robot
   const [tutorialHasErased, setTutorialHasErased] = useState(false) // Remembers if the user erased an object
   const [tutorialRobots, setTutorialRobots] = useState<number[]>([]) // Stores robots placed on the tutorial board
   const [tutorialWalls, setTutorialWalls] = useState<number[]>([]) // Stores walls placed on the tutorial board
-  const [tutorialEraseCells, setTutorialEraseCells] = useState<number[]>([6, 12, 18]) // Stores objects that can be erased during the tutorial
-  const [tutorialMoveRobot, setTutorialMoveRobot] = useState(12) // Stores the robot's position for the movement tutorial
   const [tutorialHasMoved, setTutorialHasMoved] = useState(false) // Tracks whether the user has moved the tutorial robot
   const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
   const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
@@ -31,6 +34,10 @@ function App() {
   const [boardWidth, setBoardWidth] = useState(15) // Stores the board width, starting at 15
   const [boardHeight, setBoardHeight] = useState(15) // Stores the board height, starting at 15
   const [storageWidth, setStorageWidth] = useState(15) // Tracks the width used to store robot and wall positions
+  const [viewport, setViewport] = useState(() => ({
+    width: typeof window === 'undefined' ? 1200 : window.innerWidth,
+    height: typeof window === 'undefined' ? 800 : window.innerHeight,
+  })) // Tracks the window size so the board can be sized to fit it
   const [widthText, setWidthText] = useState('15') // What the width field shows while it is being typed in
   const [heightText, setHeightText] = useState('15') // What the height field shows while it is being typed in
   const handleImport = async (file: File) => { // Handles the XML file selected by the user
@@ -165,6 +172,51 @@ function App() {
   }
 
 
+  /** The only tool each hands-on step allows. Step 5 unlocks all of them. */
+  const TOOL_FOR_STEP: Record<number, Tool> = { 2: 'wall', 3: 'robot', 4: 'erase' }
+
+  /**
+   * Moves to a tutorial step and selects that step's tool, so the toolbar always
+   * matches what the instructions ask for.
+   */
+  const goToTutorialStep = (step: number) => {
+    setTutorialStep(step)
+    const tool = TOOL_FOR_STEP[step]
+    if (tool !== undefined) setTutorialTool(tool)
+  }
+
+  /**
+   * Moves the tutorial's robots with the same engine the simulator uses, so the
+   * step demonstrates the real rules rather than an approximation.
+   */
+  const applyTutorialMove = (direction: Direction) => {
+    const board = createBoard(TUTORIAL_SIZE, TUTORIAL_SIZE)
+
+    tutorialWalls.forEach((cell) => {
+      const { x, y } = fromIndex(cell, TUTORIAL_SIZE)
+      addConcrete(board, x, y)
+    })
+
+    tutorialRobots.forEach((cell) => {
+      const { x, y } = fromIndex(cell, TUTORIAL_SIZE)
+      addTile(board, x, y)
+    })
+
+    tumble(board, direction)
+
+    setTutorialRobots(
+      board.polyominoes.flatMap((poly) => poly.tiles.map((tile) => toIndex(tile, TUTORIAL_SIZE))),
+    )
+    setTutorialHasMoved(true) // Records that the step is done
+  }
+
+  // Keeps the board sized to the window as it changes.
+  useEffect(() => {
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
   // Movement
   // The rules live in src/engine, so they can be tested without the interface
   // and checked against the TumbleTiles desktop application. The board uses
@@ -222,8 +274,7 @@ function App() {
         }
 
         if (showTutorial && tutorialStep === 5) {
-          setTutorialMoveRobot((robot) => robot % 5) // Moves the tutorial robot to the top
-          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+          applyTutorialMove('N') // Moves the tutorial robots with the engine
         }
       }
 
@@ -235,8 +286,7 @@ function App() {
         }
 
         if (showTutorial && tutorialStep === 5) {
-          setTutorialMoveRobot((robot) => 20 + (robot % 5)) // Moves the tutorial robot to the bottom
-          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+          applyTutorialMove('S') // Moves the tutorial robots with the engine
         }
       }
 
@@ -248,8 +298,7 @@ function App() {
         }
 
         if (showTutorial && tutorialStep === 5) {
-          setTutorialMoveRobot((robot) => Math.floor(robot / 5) * 5) // Moves the tutorial robot to the left edge
-          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+          applyTutorialMove('W') // Moves the tutorial robots with the engine
         }
       }
 
@@ -261,8 +310,7 @@ function App() {
         }
 
         if (showTutorial && tutorialStep === 5) {
-          setTutorialMoveRobot((robot) => Math.floor(robot / 5) * 5 + 4) // Moves the tutorial robot to the right edge
-          setTutorialHasMoved(true) // Records that the user practiced moving the robot
+          applyTutorialMove('E') // Moves the tutorial robots with the engine
         }
       }
     }
@@ -297,11 +345,9 @@ if (showTutorial) {
       <button
         type="button"
         onClick={() => {
-          setTutorialStep(1) // Resets to Step 1
+          goToTutorialStep(1) // Resets to Step 1
           setTutorialRobots([]) // Clears tutorial robots
           setTutorialWalls([]) // Clears tutorial walls
-          setTutorialEraseCells([6, 12, 18]) // Restores erase objects
-          setTutorialMoveRobot(12) // Resets robot position
           setTutorialHasMoved(false) // Resets movement progress
           setTutorialWallPlaced(false) // Resets wall progress
           setTutorialRobotPlaced(false) // Resets robot progress
@@ -347,81 +393,39 @@ if (showTutorial) {
             <h2>Step 2: Place a Wall</h2>
 
             <p>
-              Select the Wall tool and click an empty square on the board to place a wall.
+              Walls never move. Click any empty square to place one. Only the Wall tool
+              is available on this step.
             </p>
 
-            <div className="tutorial-tools"> {/* Practice toolbar */}
-              <span>[ TOOLS ]</span>
+            <TutorialBoard
+              robots={tutorialRobots}
+              walls={tutorialWalls}
+              tool={tutorialTool}
+              allowed={['wall']}
+              onSelectTool={setTutorialTool}
+              onPlaceRobot={() => {}}
+              onPlaceWall={(cell) => {
+                setTutorialWalls([...tutorialWalls, cell]) // Places a wall
+                setTutorialWallPlaced(true) // Records that the step is done
+              }}
+              onErase={() => {}}
+            />
 
-              <button
-                type="button"
-                className={tutorialTool === 'robot' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('robot')} // Selects Robot
-              >
-                Robot
+            <div className="tutorial-nav">
+              <button type="button" onClick={() => goToTutorialStep(1)}>
+                ← Back
               </button>
 
-              <button
-                type="button"
-                className={tutorialTool === 'wall' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('wall')} // Selects Wall
-              >
-                Wall
-              </button>
-
-              <button
-                type="button"
-                className={tutorialTool === 'erase' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('erase')} // Selects Erase
-              >
-                Erase
-              </button>
+              {tutorialWallPlaced && (
+                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(3)}>
+                  Next →
+                </button>
+              )}
             </div>
 
-            <div className="tutorial-board"> {/* Holds the small practice board */}
-              {Array.from({ length: 25 }).map((_, index) => (
-                <div
-                  key={index}
-                  className={`tutorial-cell ${tutorialWalls.includes(index) ? 'wall' : ''} ${tutorialRobots.includes(index) ? 'robot' : ''}`} // Shows walls and robots
-                  onClick={() => {
-                    if (tutorialTool === 'wall' && !tutorialWalls.includes(index) && !tutorialRobots.includes(index)) {
-                      setTutorialWalls([...tutorialWalls, index]) // Places a wall in an empty cell
-                      setTutorialWallPlaced(true) // Remembers that the user placed a wall
-                    }
-
-                    if (tutorialTool === 'robot' && !tutorialRobots.includes(index) && !tutorialWalls.includes(index)) {
-                      setTutorialRobots([...tutorialRobots, index]) // Places a robot in an empty cell
-                    }
-
-                    if (tutorialTool === 'erase') {
-                      setTutorialWalls(tutorialWalls.filter((cell) => cell !== index)) // Removes a wall
-                      setTutorialRobots(tutorialRobots.filter((cell) => cell !== index)) // Removes a robot
-                    }
-                  }}
-                ></div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setTutorialStep(1)} /* Returns to tutorial step 1 */
-            >
-              ← Back
-            </button>
-            
-            
-            {tutorialWallPlaced && (
-              <button
-                type="button"
-                onClick={() => {
-                  setTutorialStep(3) // Moves to Step 3
-                }}
-              >
-                Next →
-              </button>
-            )}
-            </div>
+          </div>
         )}
+
 
         {tutorialStep === 3 && (
           <div> {/* Shows the robot instructions only during step 3 */}
@@ -429,85 +433,39 @@ if (showTutorial) {
             <h2>Step 3: Place a Robot</h2>
 
             <p>
-              Select the Robot tool and click an empty square on the board to place a robot.
+              Robots are what the commands move. Click an empty square to place one.
+              Your wall from the last step is still there.
             </p>
 
-
-            <div className="tutorial-tools"> {/* Practice toolbar */}
-              <span>[ TOOLS ]</span>
-
-              <button
-                type="button"
-                className={tutorialTool === 'robot' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('robot')}
-              >
-                Robot
-              </button>
-
-              <button
-                type="button"
-                className={tutorialTool === 'wall' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('wall')}
-              >
-                Wall
-              </button>
-
-              <button
-                type="button"
-                className={tutorialTool === 'erase' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('erase')}
-              >
-                Erase
-              </button>
-            </div>
-
-
-            <div className="tutorial-board"> {/* Holds the robot practice board */}
-              {Array.from({ length: 25 }).map((_, index) => (
-                <div
-                  key={index}
-                  className={`tutorial-cell ${tutorialRobots.includes(index) ? 'robot' : ''} ${tutorialWalls.includes(index) ? 'wall' : ''}`} // Shows robots and walls
-                  onClick={() => {
-                    if (tutorialTool === 'robot' && !tutorialRobots.includes(index) && !tutorialWalls.includes(index)) {
-                      setTutorialRobots([...tutorialRobots, index]) // Places a robot in an empty cell
-                      setTutorialRobotPlaced(true) // Remembers that a robot was placed
-                    }
-
-                    if (tutorialTool === 'wall' && !tutorialWalls.includes(index) && !tutorialRobots.includes(index)) {
-                      setTutorialWalls([...tutorialWalls, index]) // Places a wall in an empty cell
-                    }
-
-                    if (tutorialTool === 'erase') {
-                      setTutorialRobots(tutorialRobots.filter((cell) => cell !== index)) // Removes a robot
-                      setTutorialWalls(tutorialWalls.filter((cell) => cell !== index)) // Removes a wall
-                    }
-                  }}
-                ></div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTutorialStep(2) // Returns to Step 2
+            <TutorialBoard
+              robots={tutorialRobots}
+              walls={tutorialWalls}
+              tool={tutorialTool}
+              allowed={['robot']}
+              onSelectTool={setTutorialTool}
+              onPlaceRobot={(cell) => {
+                setTutorialRobots([...tutorialRobots, cell]) // Places a robot
+                setTutorialRobotPlaced(true) // Records that the step is done
               }}
-            >
-              ← Back
-            </button>
+              onPlaceWall={() => {}}
+              onErase={() => {}}
+            />
 
-            {tutorialRobotPlaced && (
-              <button
-                type="button"
-                onClick={() => {
-                  setTutorialStep(4) // Moves to Step 4
-                }}
-              >
-                Next →
+            <div className="tutorial-nav">
+              <button type="button" onClick={() => goToTutorialStep(2)}>
+                ← Back
               </button>
-            )}
+
+              {tutorialRobotPlaced && (
+                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(4)}>
+                  Next →
+                </button>
+              )}
+            </div>
 
           </div>
         )}
+
 
         {tutorialStep === 4 && (
           <div> {/* Shows the erase instructions only during step 4 */}
@@ -515,93 +473,36 @@ if (showTutorial) {
             <h2>Step 4: Use Erase</h2>
 
             <p>
-              Select the Erase tool and click a robot or wall to remove it from the board.
+              Erase removes whatever is in a square. Click one of the robots or walls
+              you placed to take it off the board.
             </p>
 
-            <div className="tutorial-tools"> {/* Practice toolbar */}
-              <span>[ TOOLS ]</span>
-
-              <button
-                type="button"
-                className={tutorialTool === 'robot' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('robot')}
-              >
-                Robot
-              </button>
-
-              <button
-                type="button"
-                className={tutorialTool === 'wall' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('wall')}
-              >
-                Wall
-              </button>
-
-              <button
-                type="button"
-                className={tutorialTool === 'erase' ? 'active-tool' : ''}
-                onClick={() => setTutorialTool('erase')}
-              >
-                Erase
-              </button>
-            </div>
-
-            <div className="tutorial-board"> {/* Holds the erase practice board */}
-              {Array.from({ length: 25 }).map((_, index) => (
-                <div
-                  key={index}
-                  className={`tutorial-cell ${tutorialEraseCells.includes(index) || tutorialRobots.includes(index) ? 'robot' : ''} ${tutorialWalls.includes(index) ? 'wall' : ''}`}
-                  onClick={() => {
-                    // Places a robot in an empty square
-                    if (tutorialTool === 'robot' && !tutorialEraseCells.includes(index) && !tutorialRobots.includes(index) && !tutorialWalls.includes(index)) {
-                      setTutorialRobots([...tutorialRobots, index])
-                    }
-
-                    // Places a wall in an empty square
-                    if (tutorialTool === 'wall' && !tutorialEraseCells.includes(index) && !tutorialRobots.includes(index) && !tutorialWalls.includes(index)) {
-                      setTutorialWalls([...tutorialWalls, index])
-                    }
-
-                    // Erases a robot or wall
-                    if (tutorialTool === 'erase') {
-                      // Checks whether the clicked square contains an object
-                      if (
-                        tutorialEraseCells.includes(index) ||
-                        tutorialRobots.includes(index) ||
-                        tutorialWalls.includes(index)
-                      ) {
-                        setTutorialHasErased(true) // Remembers a successful erase
-                      }
-
-                      setTutorialEraseCells(tutorialEraseCells.filter((cell) => cell !== index))
-                      setTutorialRobots(tutorialRobots.filter((cell) => cell !== index))
-                      setTutorialWalls(tutorialWalls.filter((cell) => cell !== index))
-                    }
-                  }}
-                ></div>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTutorialEraseCells([6, 12, 18]) // Restores the erase practice robots
-                setTutorialStep(3) // Returns to Step 3
+            <TutorialBoard
+              robots={tutorialRobots}
+              walls={tutorialWalls}
+              tool={tutorialTool}
+              allowed={['erase']}
+              onSelectTool={setTutorialTool}
+              onPlaceRobot={() => {}}
+              onPlaceWall={() => {}}
+              onErase={(cell) => {
+                setTutorialRobots(tutorialRobots.filter((c) => c !== cell)) // Removes a robot
+                setTutorialWalls(tutorialWalls.filter((c) => c !== cell)) // Removes a wall
+                setTutorialHasErased(true) // Records that the step is done
               }}
-            >
-              ← Back
-            </button>
+            />
 
-            {tutorialHasErased &&  (
-              <button
-                type="button"
-                onClick={() => {
-                  setTutorialStep(5) // Moves to Step 5
-                }}
-              >
-                Next →
+            <div className="tutorial-nav">
+              <button type="button" onClick={() => goToTutorialStep(3)}>
+                ← Back
               </button>
-            )}
+
+              {tutorialHasErased && (
+                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(5)}>
+                  Next →
+                </button>
+              )}
+            </div>
 
           </div>
         )}
@@ -613,85 +514,45 @@ if (showTutorial) {
             <h2>Step 5: Move the Robots</h2>
 
             <p>
-              Use the movement buttons or the keyboard arrow keys to move the robots up, down, left, or right.
-              Robots will keep moving until they reach the edge of the board, a wall, or another robot.
+              Every command moves all robots at once. They keep going until they reach the
+              edge of the board, a wall, or another robot. All three tools are available
+              now, so build a board and try it.
             </p>
 
-            <div className="tutorial-board"> {/* Holds the movement practice board */}
-              {Array.from({ length: 25 }).map((_, index) => (
-                <div
-                  key={index}
-                  className={`tutorial-cell ${tutorialMoveRobot === index ? 'robot' : ''}`} /* Shows the robot at its current position */
-                ></div>
-              ))}
-            </div>
+            <TutorialBoard
+              robots={tutorialRobots}
+              walls={tutorialWalls}
+              tool={tutorialTool}
+              allowed={TOOLS}
+              onSelectTool={setTutorialTool}
+              onPlaceRobot={(cell) => setTutorialRobots([...tutorialRobots, cell])}
+              onPlaceWall={(cell) => setTutorialWalls([...tutorialWalls, cell])}
+              onErase={(cell) => {
+                setTutorialRobots(tutorialRobots.filter((c) => c !== cell))
+                setTutorialWalls(tutorialWalls.filter((c) => c !== cell))
+              }}
+            />
 
             <div className="tutorial-movement"> {/* Holds the tutorial movement buttons */}
-
-              <button
-                type="button"
-                 onClick={() => {
-                  setTutorialMoveRobot(tutorialMoveRobot % 5) // Moves the robot to the top of its current column
-                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
-                }}
-              >
-                ↑
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setTutorialMoveRobot(Math.floor(tutorialMoveRobot / 5) * 5) // Moves the robot to the left edge of its current row
-                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
-                }}
-              >
-                ←
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setTutorialMoveRobot(20 + (tutorialMoveRobot % 5)) // Moves the robot to the bottom of its current column
-                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
-                }}
-              >
-                ↓
-              </button>
-
-              <button
-                type="button"
-                 onClick={() => {
-                  setTutorialMoveRobot(Math.floor(tutorialMoveRobot / 5) * 5 + 4) // Moves the robot to the right edge of its current row
-                  setTutorialHasMoved(true) // Records that the user practiced moving the robot
-                }}
-              >
-                →
-              </button>
-
+              <button type="button" onClick={() => applyTutorialMove('N')}>↑</button>
+              <button type="button" onClick={() => applyTutorialMove('W')}>←</button>
+              <button type="button" onClick={() => applyTutorialMove('S')}>↓</button>
+              <button type="button" onClick={() => applyTutorialMove('E')}>→</button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setTutorialEraseCells([6, 12, 18]) // Restores the three practice robots
-                setTutorialStep(4) // Returns to Step 4
-              }}
-            >
-              ← Back
-            </button>
-
-            {tutorialHasMoved && (
-              <button
-                type="button"
-                onClick={() => setTutorialStep(6)} /* Moves to tutorial step 6 */
-              >
-                Next →
+            <div className="tutorial-nav">
+              <button type="button" onClick={() => goToTutorialStep(4)}>
+                ← Back
               </button>
-            )}
+
+              {tutorialHasMoved && (
+                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(6)}>
+                  Next →
+                </button>
+              )}
+            </div>
 
           </div>
-
-          
         )}
 
 
@@ -706,10 +567,7 @@ if (showTutorial) {
 
             <button
               type="button"
-              onClick={() => {
-                setTutorialMoveRobot(12) // Returns the robot to the center
-                setTutorialStep(5) // Returns to Step 5
-              }}
+              onClick={() => goToTutorialStep(5)}
             >
               ← Back
             </button>
@@ -717,11 +575,9 @@ if (showTutorial) {
             <button
               type="button"
               onClick={() => {
-                setTutorialStep(1) // Resets to Step 1
+                goToTutorialStep(1) // Resets to Step 1
                 setTutorialRobots([]) // Clears tutorial robots
                 setTutorialWalls([]) // Clears tutorial walls
-                setTutorialEraseCells([6, 12, 18]) // Restores erase objects
-                setTutorialMoveRobot(12) // Resets robot position
                 setTutorialHasMoved(false) // Resets movement progress
                 setTutorialWallPlaced(false) // Resets wall progress
                 setTutorialRobotPlaced(false) // Resets robot progress
@@ -744,6 +600,10 @@ if (showTutorial) {
 }
 
 
+
+  // The board panel has the page padding either side, and leaves room for the
+  // toolbars above it; below the floor in cellSizeFor the panel scrolls instead.
+  const cellSize = cellSizeFor(boardWidth, boardHeight, viewport.width - 120, viewport.height - 320)
 
   // Simulator page
   if (showSimulator) {
@@ -902,9 +762,12 @@ if (showTutorial) {
           <div
             className="board-grid"
             style={{
-              gridTemplateColumns: `repeat(${boardWidth}, 30px)`,
-              gridTemplateRows: `repeat(${boardHeight}, 30px)`
-            }} /* Changes the grid size based on the selected width and height */
+              // Drives .board-cell's size as well as the tracks, so the cells
+              // actually shrink rather than overflowing a clamped grid box.
+              '--cell': `${cellSize}px`,
+              gridTemplateColumns: `repeat(${boardWidth}, ${cellSize}px)`,
+              gridTemplateRows: `repeat(${boardHeight}, ${cellSize}px)`,
+            } as CSSProperties} /* Sizes the grid to the board, shrinking the cells so it fits the window */
           > 
             {Array.from({ length:  boardWidth * boardHeight }).map((_, index) => (
               <div 

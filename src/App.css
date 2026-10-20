@@ -229,6 +229,13 @@
   align-self: flex-start;
 }
 
+/* Toolbar shown during tutorial steps */
+.tutorial-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s3); /* Adds space between [ TOOLS ] and the buttons */
+}
+
 .tutorial-board {
   display: grid;
   /* The markup does not set a template here, unlike the simulator board. */
@@ -266,4 +273,26 @@
     var(--surface) 2px,
     var(--surface) 5px
   );
+}
+
+.import-button {
+  display: inline-flex;           /* Aligns the text */
+  align-items: center;            /* Centers text vertically */
+  justify-content: center;        /* Centers text horizontally */
+  padding: 8px 10px;              /* Reduces the button's size */
+  height: 32px;                   /* Matches the other buttons' height */
+  background-color: white;        /* White background */
+  color: black;                   /* Black text */
+  border: 1px solid black;        /* Black border */
+  border-radius: 0;               /* Square corners */
+  font-family: inherit;           /* Uses the same font */
+  font-size: 10px;                /* Makes the text smaller */
+  text-transform: uppercase;      /* Displays IMPORT XML */
+  cursor: pointer;                /* Hand cursor on hover */
+  box-sizing: border-box;         /* Keeps padding inside the height */
+}
+
+.import-button:hover {
+  background-color: #111827;      /* Dark background on hover */
+  color: white;                   /* White text on hover */
 }

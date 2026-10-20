@@ -296,3 +296,86 @@
   background-color: #111827;      /* Dark background on hover */
   color: white;                   /* White text on hover */
 }
+/* ---------- Demo animation ---------- */
+
+.demo-page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  align-items: flex-start;
+}
+
+.demo-caption {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-muted);
+  min-height: 20px; /* Holds its line so the board does not jump between captions */
+}
+
+.demo-stage {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  padding: var(--s5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s6);
+  flex-wrap: wrap;
+}
+
+/* The arrows sit in a cross, matching the simulator's movement controls. */
+.demo-arrows {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  grid-template-rows: repeat(2, 34px);
+  gap: var(--s1);
+}
+
+.demo-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 15px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* Up sits above, the other three in a row beneath it. */
+.demo-arrow:nth-child(1) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.demo-arrow:nth-child(2) {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.demo-arrow:nth-child(3) {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.demo-arrow:nth-child(4) {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.demo-progress {
+  width: 100%;
+  height: 3px;
+  background: var(--strip);
+}
+
+.demo-progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}

@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react' // Lets the page use state and respond to keyboard controls
 import './App.css'
+import Demo from './Demo.tsx'
 import type { Direction } from './engine'
 import { addConcrete, addTile, createBoard, fromIndex, toIndex, tumble } from './engine'
+
+/**
+ * Largest board we will render. 100 matches the desktop application's default
+ * and keeps the cell count low enough that the page stays responsive.
+ */
+const MAX_BOARD_SIZE = 100
 
 function App() {
   // State
   const [showSimulator, setShowSimulator] = useState(false) // Tracks whether the simulator should be shown
   const [showTutorial, setShowTutorial] = useState(false) // Tracks whether the tutorial should be shown
+  const [showDemo, setShowDemo] = useState(false) // Tracks whether the opening animation should be shown
   const [tutorialStep, setTutorialStep] = useState(1) // Tracks which tutorial step the user is currently on
   const [tutorialTool, setTutorialTool] = useState('wall') // Tracks which tool is selected during the tutorial
   const [tutorialWallPlaced, setTutorialWallPlaced] = useState(false) // Remembers if the user has placed a wall
@@ -23,6 +31,8 @@ function App() {
   const [boardWidth, setBoardWidth] = useState(15) // Stores the board width, starting at 15
   const [boardHeight, setBoardHeight] = useState(15) // Stores the board height, starting at 15
   const [storageWidth, setStorageWidth] = useState(15) // Tracks the width used to store robot and wall positions
+  const [widthText, setWidthText] = useState('15') // What the width field shows while it is being typed in
+  const [heightText, setHeightText] = useState('15') // What the height field shows while it is being typed in
   const handleImport = async (file: File) => { // Handles the XML file selected by the user
   const xmlText = await file.text() // Reads the file contents as text
   const parser = new DOMParser() // Creates a parser that can read XML
@@ -34,13 +44,22 @@ function App() {
   const width = Number(boardSize.getAttribute('width')) // Gets the board width from XML
   const height = Number(boardSize.getAttribute('height')) // Gets the board height from XML
 
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    width > MAX_BOARD_SIZE ||
+    height > MAX_BOARD_SIZE
+  ) {
     return // Stops if the board dimensions are invalid
   }
 
   setBoardWidth(width) // Updates the simulator's board width
   setStorageWidth(width) // Matches stored positions to the imported board width
   setBoardHeight(height) // Updates the simulator's board height
+  setWidthText(String(width)) // Keeps the width field showing the imported size
+  setHeightText(String(height)) // Keeps the height field showing the imported size
 
   const tiles = xmlDoc.querySelectorAll('TileData > Tile') // Finds every placed tile in the XML
 
@@ -75,9 +94,18 @@ function App() {
 
   const handleExport = () => { // Handles exporting the board as XML
 
-    const robotXML = robots.map((index) => { // Goes through every robot
-      const x = index % storageWidth // Gets the robot or wall's stored column
-      const y = Math.floor(index / storageWidth) // Gets the robot or wall's stored row
+    // Hidden objects sit outside the visible board, so they are left out of the
+    // file. Exporting them would write coordinates past BoardSize, and the
+    // importer would then discard them, losing data on a round trip.
+    const isVisible = (index: number) => {
+      const x = index % storageWidth
+      const y = Math.floor(index / storageWidth)
+      return x < boardWidth && y < boardHeight
+    }
+
+    const robotXML = robots.filter(isVisible).map((index) => { // Goes through every visible robot
+      const x = index % storageWidth // Gets the robot's stored column
+      const y = Math.floor(index / storageWidth) // Gets the robot's stored row
 
       return `
         <Tile>
@@ -94,9 +122,9 @@ function App() {
     }).join('') // Combines all robots into one string
 
 
-    const wallXML = walls.map((index) => { // Goes through every wall
-      const x = index % storageWidth // Gets the robot or wall's stored column
-      const y = Math.floor(index / storageWidth) // Gets the robot or wall's stored row
+    const wallXML = walls.filter(isVisible).map((index) => { // Goes through every visible wall
+      const x = index % storageWidth // Gets the wall's stored column
+      const y = Math.floor(index / storageWidth) // Gets the wall's stored row
 
       return `
         <Tile>
@@ -249,6 +277,19 @@ function App() {
 
 
 // Tutorial page
+  // The animation plays before the tutorial, so a new visitor sees the model
+  // run once before being asked to build a board themselves.
+  if (showDemo) {
+    return (
+      <Demo
+        onDone={() => {
+          setShowDemo(false) // Ends the animation
+          setShowTutorial(true) // Hands over to the interactive steps
+        }}
+      />
+    )
+  }
+
 if (showTutorial) {
   return (
     <div className="tutorial-page"> {/* Main tutorial page */}
@@ -686,7 +727,8 @@ if (showTutorial) {
                 setTutorialRobotPlaced(false) // Resets robot progress
                 setTutorialHasErased(false) // Resets erase progress
                 setTutorialTool('wall') // Selects Wall as the starting tool
-                setShowTutorial(false) // Returns to home
+                setShowTutorial(false) // Leaves the tutorial
+                setShowSimulator(true) // Drops straight into the simulator
               }}
             >
               Finish Tutorial
@@ -782,11 +824,18 @@ if (showTutorial) {
             Width:
             <input
               type="number"
-              value={boardWidth}
+              min={1}
+              max={MAX_BOARD_SIZE}
+              value={widthText}
+              onBlur={() => setWidthText(String(boardWidth))} /* Puts back the real width if the field was left empty */
               onChange={(event) => {
+                setWidthText(event.target.value) // Always lets the field show what was typed, including empty
+
                 const newWidth = Number(event.target.value) // Gets the new width
 
-                if (!Number.isInteger(newWidth) || newWidth < 1) return // Prevents invalid widths
+                // An empty or out-of-range field is left alone until it is valid,
+                // so the board is not resized half way through typing a number.
+                if (!Number.isInteger(newWidth) || newWidth < 1 || newWidth > MAX_BOARD_SIZE) return
 
                 const newStorageWidth = Math.max(storageWidth, newWidth) // Keeps space for hidden objects
 
@@ -816,11 +865,16 @@ if (showTutorial) {
             Height:
             <input
               type="number"
-              value={boardHeight}
+              min={1}
+              max={MAX_BOARD_SIZE}
+              value={heightText}
+              onBlur={() => setHeightText(String(boardHeight))} /* Puts back the real height if the field was left empty */
               onChange={(event) => {
+                setHeightText(event.target.value) // Always lets the field show what was typed, including empty
+
                 const newHeight = Number(event.target.value) // Gets the new height
 
-                if (!Number.isInteger(newHeight) || newHeight < 1) return // Prevents invalid heights
+                if (!Number.isInteger(newHeight) || newHeight < 1 || newHeight > MAX_BOARD_SIZE) return
 
                 setBoardHeight(newHeight) // Changes height without deleting robots or walls
               }}
@@ -833,6 +887,7 @@ if (showTutorial) {
             onClick={() => {
               setRobots([]) // Removes all robots from the board
               setWalls([]) // Removes all walls from the board
+              setStorageWidth(boardWidth) // Nothing is hidden any more, so stop reserving extra columns
             }}
           >
             Clear Board
@@ -935,7 +990,7 @@ if (showTutorial) {
           <button 
             type="button" 
             className="tutorial-button" /* Styles the Start Tutorial button */
-            onClick={() => setShowTutorial(true)} /* Opens the tutorial when clicked */
+            onClick={() => setShowDemo(true)} /* Plays the animation, which then opens the tutorial */
           > 
             Start Tutorial
           </button> {/* Button that will eventually start the tutorial */}

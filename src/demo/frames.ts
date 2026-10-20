@@ -36,20 +36,26 @@ export interface DemoScript {
  */
 export const DEMO_SCRIPT: DemoScript = {
   cols: 8,
-  rows: 6,
+  rows: 8,
   walls: [
-    { x: 2, y: 4 },
-    { x: 3, y: 4 },
-    { x: 5, y: 1 },
-    { x: 5, y: 2 },
+    { x: 3, y: 2 },
+    { x: 4, y: 2 },
+    { x: 6, y: 4 },
+    { x: 1, y: 5 },
+    { x: 2, y: 5 },
+    { x: 5, y: 6 },
+    { x: 6, y: 6 },
+    { x: 3, y: 7 },
   ],
   robots: [
-    { x: 1, y: 0 },
-    { x: 3, y: 0 },
-    { x: 6, y: 0 },
-    { x: 7, y: 3 },
+    { x: 0, y: 0 },
+    { x: 2, y: 0 },
+    { x: 5, y: 0 },
+    { x: 7, y: 1 },
+    { x: 1, y: 3 },
+    { x: 6, y: 3 },
   ],
-  commands: ['W', 'E', 'S'],
+  commands: ['W', 'S', 'E'],
 }
 
 const DIRECTION_NAMES: Record<Direction, string> = {

@@ -331,8 +331,11 @@ function App() {
     return (
       <Demo
         onDone={() => {
-          setShowDemo(false) // Ends the animation
-          setShowTutorial(true) // Hands over to the interactive steps
+          setShowDemo(false) // Ends the demonstration
+          setShowTutorial(true) // Opens the interactive tutorial
+        }}
+        onBackHome={() => {
+          setShowDemo(false) // Returns to the landing page
         }}
       />
     )

@@ -12,7 +12,8 @@ const ARROWS: { direction: Direction; glyph: string; label: string }[] = [
 
 interface DemoProps {
   /** Called when the viewer chooses to continue, or skips. */
-  onDone: () => void
+  onDone: () => void // Continues to the interactive tutorial
+  onBackHome: () => void // Returns to the landing page
 }
 
 /**
@@ -21,7 +22,7 @@ interface DemoProps {
  * frames come from the real engine, so this is the model running rather than an
  * imitation of it.
  */
-function Demo({ onDone }: DemoProps) {
+function Demo({ onDone, onBackHome }: DemoProps) {
   const frames = useMemo(() => buildDemoFrames(), [])
   const stepCount = useMemo(() => countSteps(frames), [frames])
   const [index, setIndex] = useState(0)
@@ -105,7 +106,16 @@ function Demo({ onDone }: DemoProps) {
       </div>
 
       <div className="demo-controls">
-        <button type="button" disabled={currentStep === 0} onClick={() => goToStep(currentStep - 1)}>
+        <button
+          type="button"
+          onClick={() => {
+            if (currentStep === 0) {
+              onBackHome() // Step 1: return to landing page
+            } else {
+              goToStep(currentStep - 1) // Other steps: go back one step
+            }
+          }}
+        >
           ← Back
         </button>
 

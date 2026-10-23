@@ -449,3 +449,9 @@
   height: 100%;
   background: var(--ink);
 }
+
+/* Highlights a board square when the user selects it */
+.board-cell.selected-cell {
+  outline: 3px solid #ff9800; /* Adds an orange outline */
+  outline-offset: -3px; /* Keeps the outline inside the square */
+}

@@ -29,6 +29,9 @@ function App() {
   const [tutorialWalls, setTutorialWalls] = useState<number[]>([]) // Stores walls placed on the tutorial board
   const [tutorialHasMoved, setTutorialHasMoved] = useState(false) // Tracks whether the user has moved the tutorial robot
   const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
+  const [selectedCells, setSelectedCells] = useState<number[]>([]) // Stores the positions of selected robots and walls
+  const [isSelecting, setIsSelecting] = useState(false) // Tracks whether the user is holding down the mouse to select squares
+  const [draggedCell, setDraggedCell] = useState<number | null>(null) // Remembers which robot or wall we're dragging
   const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
   const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
   const [boardWidth, setBoardWidth] = useState(15) // Stores the board width, starting at 15
@@ -96,6 +99,9 @@ function App() {
   }) // Ends the tiles.forEach() loop
   setRobots(importedRobots) // Places the imported robots on the board
   setWalls(importedWalls) // Places the imported walls on the board
+  setSelectedCells([]) // Clears old orange highlights when importing a new board
+  setDraggedCell(null) // Cancels any unfinished drag
+  setIsSelecting(false) // Stops any active area selection
 } // Ends the handleImport function
 
 
@@ -257,10 +263,87 @@ function App() {
     ])
   }
 
-  const moveUp = () => applyMove('N') // Moves all robots upward
-  const moveDown = () => applyMove('S') // Moves all robots downward
-  const moveLeft = () => applyMove('W') // Moves all robots to the left
-  const moveRight = () => applyMove('E') // Moves all robots to the right
+
+  // Moves selected robots and walls one square in the chosen direction
+  const moveSelection = (direction: Direction) => {
+
+    // Stops the function if no objects are selected
+    if (selectedCells.length === 0) return
+
+    // Calculates horizontal movement: right = 1, left = -1
+    const dx = direction === 'E' ? 1 : direction === 'W' ? -1 : 0
+
+    // Calculates vertical movement: down = 1, up = -1
+    const dy = direction === 'S' ? 1 : direction === 'N' ? -1 : 0
+
+    // Creates a list of the new positions for all selected objects
+    const newPositions = selectedCells.map((cell) => {
+
+      // Finds the object's current column
+      const x = cell % storageWidth
+
+      // Finds the object's current row
+      const y = Math.floor(cell / storageWidth)
+
+      // Calculates its new column and row
+      const newX = x + dx
+      const newY = y + dy
+
+      // Checks whether the new position is outside the board
+      if (newX < 0 || newX >= boardWidth || newY < 0 || newY >= boardHeight) {
+        return null // Marks this movement as invalid
+      }
+
+      // Converts the new coordinates back into a stored cell number
+      return newY * storageWidth + newX
+    })
+
+    // Stops if any selected object would move outside the board
+    if (newPositions.some((position) => position === null)) return
+
+    // Checks whether any destination contains an unselected robot or wall
+    const blocked = newPositions.some((position) =>
+      position !== null &&
+      (robots.includes(position) || walls.includes(position)) &&
+      !selectedCells.includes(position)
+    )
+
+    // Cancels the entire movement if another object blocks the way
+    if (blocked) return
+
+    // Converts the valid destination positions into numbers
+    const destinations = newPositions as number[]
+
+    // Creates a mapping from each original position to its new position
+    const movedCells = new Map(
+      selectedCells.map((cell, index) => [cell, destinations[index]])
+    )
+
+    // Moves only the selected robots; unselected robots stay where they are
+    setRobots(robots.map((cell) => movedCells.get(cell) ?? cell))
+
+    // Moves only the selected walls; unselected walls stay where they are
+    setWalls(walls.map((cell) => movedCells.get(cell) ?? cell))
+
+    // Updates the selection so the orange outlines follow the moved objects
+    setSelectedCells(destinations)
+  }
+
+  // Handles movement commands for the simulator
+  const handleMovement = (direction: Direction) => {
+  if (selectedTool === 'select' && selectedCells.length > 0) {
+    moveSelection(direction) // Moves selected objects one square
+  } else {
+    setSelectedCells([]) // Clears old highlights
+    applyMove(direction) // Runs normal simulation movement
+  }
+}
+
+  // Each arrow passes its direction to our movement handler
+  const moveUp = () => handleMovement('N') // N means North (up)
+  const moveDown = () => handleMovement('S') // S means South (down)
+  const moveLeft = () => handleMovement('W') // W means West (left)
+  const moveRight = () => handleMovement('E') // E means East (right)
 
   useEffect(() => { // Listens for keyboard arrow key presses
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -320,7 +403,17 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown) // Stops listening when no longer needed
     }
-  }, [showSimulator, showTutorial, tutorialStep, robots, walls])
+  }, [
+    showSimulator,  // Updates keyboard controls when the simulator opens or closes
+    showTutorial,   // Updates keyboard controls when the tutorial opens or closes
+    tutorialStep,   // Tracks the current tutorial step
+    robots,         // Uses the latest robot positions
+    walls,          // Uses the latest wall positions
+    selectedTool,   // Knows whether Select is currently active
+    selectedCells,  // Uses the latest selected positions
+    tutorialRobots, // Uses the latest tutorial robot positions
+    tutorialWalls,  // Uses the latest tutorial wall positions
+    ])
 
 
 
@@ -632,7 +725,20 @@ if (showTutorial) {
           <button
             type="button"
             className={selectedTool === 'robot' ? 'active-tool' : ''} /* Highlights Robot when selected */
-            onClick={() => setSelectedTool('robot')} /* Selects the Robot tool */
+            onClick={() => {
+            setSelectedTool('robot') // Activates the Robot tool
+
+            // Finds highlighted squares that don't already contain objects
+            const emptyCells = selectedCells.filter(
+              (cell) => !robots.includes(cell) && !walls.includes(cell)
+            )
+
+            // Adds robots to all highlighted empty squares
+            setRobots((previous) => [...previous, ...emptyCells])
+
+            // Removes the orange highlights after placing the robots
+            setSelectedCells([])
+          }}
           >
             Robot
           </button>
@@ -640,7 +746,20 @@ if (showTutorial) {
           <button
             type="button"
             className={selectedTool === 'wall' ? 'active-tool' : ''} /* Highlights Wall when selected */
-            onClick={() => setSelectedTool('wall')} /* Selects the Wall tool */
+            onClick={() => {
+              setSelectedTool('wall') // Activates the Wall tool
+
+              // Finds highlighted squares that are empty
+              const emptyCells = selectedCells.filter(
+                (cell) => !robots.includes(cell) && !walls.includes(cell)
+              )
+
+              // Places walls in all highlighted empty squares
+              setWalls((previous) => [...previous, ...emptyCells])
+
+              // Clears the orange highlights after placing the walls
+              setSelectedCells([])
+            }}
           >
             Wall
           </button>
@@ -648,10 +767,35 @@ if (showTutorial) {
           <button
             type="button"
             className={selectedTool === 'erase' ? 'active-tool' : ''} /* Highlights Erase when selected */
-            onClick={() => setSelectedTool('erase')} /* Selects the Erase tool */
+            onClick={() => {
+              setSelectedTool('erase') // Activates the Erase tool
+
+              // Removes robots located in highlighted squares
+              setRobots((previous) =>
+                previous.filter((cell) => !selectedCells.includes(cell))
+              )
+
+              // Removes walls located in highlighted squares
+              setWalls((previous) =>
+                previous.filter((cell) => !selectedCells.includes(cell))
+              )
+
+              // Clears the orange highlights after erasing
+              setSelectedCells([])
+            }}
           >
             Erase
           </button>
+
+
+          <button
+            type="button"
+            className={selectedTool === 'select' ? 'active-tool' : ''} // Highlights Select
+            onClick={() => setSelectedTool('select')} // Activates Select
+          >
+            Select & Move
+          </button>
+
 
           <label className="import-button">
             Import XML
@@ -717,7 +861,8 @@ if (showTutorial) {
 
                   return y * newStorageWidth + x // Preserves the original coordinates
                 }))
-
+                
+                setSelectedCells([]) // Clears old highlights before resizing the board
                 setStorageWidth(newStorageWidth) // Updates the storage width
                 setBoardWidth(newWidth) // Updates the visible width
               }}
@@ -739,6 +884,7 @@ if (showTutorial) {
 
                 if (!Number.isInteger(newHeight) || newHeight < 1 || newHeight > MAX_BOARD_SIZE) return
 
+                setSelectedCells([]) // Clears orange highlights before resizing the board
                 setBoardHeight(newHeight) // Changes height without deleting robots or walls
               }}
             />
@@ -750,7 +896,11 @@ if (showTutorial) {
             onClick={() => {
               setRobots([]) // Removes all robots from the board
               setWalls([]) // Removes all walls from the board
-              setStorageWidth(boardWidth) // Nothing is hidden any more, so stop reserving extra columns
+              setSelectedCells([]) // Removes all orange highlights
+              setStorageWidth(boardWidth) // Resets the storage width
+
+              setDraggedCell(null) // Cancels any unfinished drag
+              setIsSelecting(false) // Stops selecting multiple squares
             }}
           >
             Clear Board
@@ -763,6 +913,15 @@ if (showTutorial) {
           <h2>Board</h2> {/* Board section title */} 
  
           <div
+          // Stops dragging when the mouse button is released
+          onMouseUp={() => setIsSelecting(false)}
+
+          // Also stops dragging if the mouse leaves the board
+          onMouseLeave={() => {
+            setIsSelecting(false) // Stops highlighting squares
+            setDraggedCell(null) // Cancels dragging when leaving the board
+          }}
+
             className="board-grid"
             style={{
               // Drives .board-cell's size as well as the tracks, so the cells
@@ -775,14 +934,107 @@ if (showTutorial) {
             {Array.from({ length:  boardWidth * boardHeight }).map((_, index) => (
               <div 
                 className={`board-cell ${
-                  robots.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)) ? 'robot' : ''
+                  // Checks whether this square contains a robot
+                  robots.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth))
+                    ? 'robot' // Adds the robot CSS class
+                    : '' // Adds nothing if there is no robot
                 } ${
-                  walls.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)) ? 'wall' : ''
+                  // Checks whether this square contains a wall
+                  walls.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth))
+                    ? 'wall' // Adds the wall CSS class
+                    : '' // Adds nothing if there is no wall
+                } ${
+                  // Checks whether this square is in our selectedCells array
+                  selectedCells.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth))
+                    ? 'selected-cell' // Adds a special class to selected squares
+                    : '' // Adds nothing if the square isn't selected
                 }`}
                 key={index}
+                onMouseDown={(event) => {
+                  if (selectedTool !== 'select') return // Only works with Select
+                  if (event.button !== 0) return // Only accepts left mouse clicks
+
+                  event.preventDefault() // Prevents unwanted text selection
+
+                  const storedIndex =
+                    Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)
+                    // Finds the clicked square's stored position
+
+                  if (robots.includes(storedIndex) || walls.includes(storedIndex)) {
+                    setDraggedCell(storedIndex) // Remembers the robot or wall being dragged
+                    return // Stops area selection while dragging an object
+                  }
+
+                  setIsSelecting(true) // Allows highlighting multiple squares normally
+                }}
+
+                onMouseEnter={() => {
+                // Only highlights squares while dragging with Select
+                if (selectedTool !== 'select' || !isSelecting) return
+
+                // Finds the square's position on the board
+                const storedIndex = Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)
+
+                // Adds the square to the highlighted selection
+                setSelectedCells((previous) =>
+                  previous.includes(storedIndex)
+                    ? previous // Keeps it highlighted if already selected
+                    : [...previous, storedIndex] // Highlights the new square
+                )
+              }}
+
+              onMouseUp={() => {
+                if (draggedCell === null) return // Stops if we aren't dragging an object
+
+                // Finds the square where the mouse was released
+                const targetCell =
+                  Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)
+
+                // Checks whether the destination is empty
+                const isEmpty =
+                  !robots.includes(targetCell) && !walls.includes(targetCell)
+
+                if (isEmpty) {
+                  // Moves the robot if the dragged object is a robot
+                  setRobots((previous) =>
+                    previous.map((cell) => cell === draggedCell ? targetCell : cell)
+                  )
+
+                  // Moves the wall if the dragged object is a wall
+                  setWalls((previous) =>
+                    previous.map((cell) => cell === draggedCell ? targetCell : cell)
+                  )
+                }
+
+                if (isEmpty) {
+                  setSelectedCells([targetCell]) // Highlights the robot or wall at its new position
+                }
+
+                setDraggedCell(null) // Ends the drag operation
+              }}
+
                 onClick={() => {
                   // Converts the clicked square into its stored position
                   const storedIndex = Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)
+
+
+
+                  // Checks whether the Select tool is active
+                  if (selectedTool === 'select') {
+
+                    // Updates the list of highlighted board squares
+                    setSelectedCells((previous) =>
+
+                      // Checks whether this square is already highlighted
+                      previous.includes(storedIndex)
+
+                        // If highlighted, clicking again removes it from the selection
+                        ? previous.filter((cell) => cell !== storedIndex)
+
+                        // Otherwise, adds the square to the highlighted area
+                        : [...previous, storedIndex]
+                    )
+                  }
 
                   // Places a robot only if the square is empty
                   if (selectedTool === 'robot' && !robots.includes(storedIndex) && !walls.includes(storedIndex)) {
@@ -804,6 +1056,13 @@ if (showTutorial) {
             ))}
           </div>
         </div> {/* Closes the simulator board */}
+
+        {selectedTool === 'select' && selectedCells.length > 0 && (
+          <div className="movement-controls">
+            <h2>Edit Selected Objects</h2> {/* Editing controls heading */}
+            <p>Move highlighted robots or walls one square at a time.</p>
+          </div>
+        )}
 
         <div className="movement-controls"> {/* Holds the controls used to move the robots */}
           <h2>Movement</h2> {/* Movement controls title */}

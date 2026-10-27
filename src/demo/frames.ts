@@ -134,7 +134,7 @@ export function buildDemoFrames(script: DemoScript = DEMO_SCRIPT): Frame[] {
       walls: wallsOf(board),
       direction,
       caption: 'Command: ' + name + '. Watch every robot move at once.',
-      hold: 700,
+      hold: 1100,
     })
 
     while (step(board, direction)) {
@@ -144,7 +144,7 @@ export function buildDemoFrames(script: DemoScript = DEMO_SCRIPT): Frame[] {
         walls: wallsOf(board),
         direction,
         caption: 'Every robot slides ' + name + '.',
-        hold: 170,
+        hold: 220,
       })
     }
 
@@ -154,7 +154,7 @@ export function buildDemoFrames(script: DemoScript = DEMO_SCRIPT): Frame[] {
       walls: wallsOf(board),
       direction,
       caption: 'Each one stops at a wall, an edge, or another robot.',
-      hold: 600,
+      hold: 1000,
     })
 
     stepNumber++

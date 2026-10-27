@@ -1,51 +1,95 @@
 /*
  * Design tokens.
  *
- * The look is taken from a technical/blueprint wireframe style: monochrome
- * only, square corners, hairline borders, no shadows, and uppercase
- * letter-spaced micro labels. State is shown by fill and pattern rather than
- * color, which keeps the board readable and does not depend on hue.
+ * The look is a technical/blueprint wireframe: monochrome only, square
+ * corners, hairline borders, no shadows, and uppercase letter-spaced micro
+ * labels. State is shown by fill and pattern rather than colour, which keeps
+ * the board readable and does not depend on hue.
  */
 :root {
-  /* Surfaces */
-  --page: #e8eaed;
-  --surface: #ffffff;
-  --strip: #d7dade;
-  --fill-soft: #f2f3f5;
+  /* --- Colour roles ------------------------------------------------------
+   * Monochrome, so error and success are distinguished by a mark rather than
+   * a hue. Adding a real red or green would be a change to the palette.
+   */
+  --color-bg: #e8eaed;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #d7dade;
+  --color-surface-hover: #f2f3f5;
 
-  /* Ink */
-  --ink: #111318;
-  --ink-muted: #6b7280;
+  --color-text: #111318;
+  /* Darkened from #6b7280, which failed WCAG AA on three of the four
+     backgrounds; at 4.80:1 on the sunken strip this passes on all of them. */
+  --color-text-muted: #565c66;
 
-  /* Lines */
-  --line: #111318;
-  --line-soft: #c3c7cd;
+  --color-border: #111318;
+  --color-border-soft: #c3c7cd;
+
+  --color-primary: #111318;
+  --color-on-primary: #ffffff;
+  --color-focus: #111318;
+  --color-error: #111318;
+  --color-success: #111318;
 
   /* Board pieces */
-  --robot: #111318;
-  --wall: #9aa0a8;
+  --color-robot: #111318;
+  --color-wall: #9aa0a8;
 
-  /* Spacing scale, 4px based */
-  --s1: 4px;
-  --s2: 8px;
-  --s3: 12px;
-  --s4: 16px;
-  --s5: 24px;
-  --s6: 32px;
-  --s7: 48px;
+  /* --- Spacing, 4px based ------------------------------------------------ */
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-12: 12px;
+  --space-16: 16px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --space-96: 96px;
 
+  /* --- Type scale -------------------------------------------------------- */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 20px;
+  --text-xl: 28px;
+  /* One step above the scale, used only by the landing headline. */
+  --text-display: 44px;
+
+  --font-sans: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* --- Lines and layout -------------------------------------------------- */
+  --border-width: 1px;
+  --border-width-strong: 2px;
+  --border-width-marker: 4px;
+
+  --content-width: 820px;
+  --content-width-wide: 1100px;
+
+  /* Board cells */
   --cell: 30px;
   --cell-lg: 40px;
+  /* The tutorial's practice board, which shrinks on small screens. */
+  --cell-tutorial: 40px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* --- Motion ------------------------------------------------------------
+   * Defined but not yet applied; nothing animates today.
+   */
+  --transition-fast: 150ms;
+  --transition: 200ms;
+  --ease: ease-out;
 
-  font: 16px/1.5 var(--sans);
-  color: var(--ink);
-  background: var(--page);
+  font: var(--text-base) / 1.5 var(--font-sans);
+  color: var(--color-text);
+  background: var(--color-bg);
   color-scheme: light;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html {
+  /* Reserves the scrollbar's space on every page, so content centred in the
+     viewport does not shift sideways when one page happens to scroll. */
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -59,20 +103,20 @@ body {
 
 h1,
 h2 {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-weight: 600;
-  color: var(--ink);
+  color: var(--color-text);
   margin: 0;
 }
 
 h1 {
-  font-size: 28px;
+  font-size: var(--text-xl);
   text-transform: uppercase;
   letter-spacing: 2px;
 }
 
 h2 {
-  font-size: 12px;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 1.5px;
 }
@@ -83,34 +127,35 @@ p {
 
 /* Every control shares the same square, hairline treatment. */
 button {
-  font-family: var(--mono);
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border);
   border-radius: 0;
-  padding: var(--s2) var(--s4);
+  padding: var(--space-8) var(--space-16);
   cursor: pointer;
 }
 
 button:hover {
-  background: var(--fill-soft);
+  background: var(--color-surface-hover);
 }
 
-/* Selection is shown by inverting, not by a color accent. */
+/* Selection is shown by inverting, not by a colour accent. */
 button:active {
-  background: var(--ink);
-  color: var(--surface);
+  background: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
-input {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink);
-  background: var(--surface);
-  border: 1px solid var(--line-soft);
+input,
+select {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: var(--border-width) solid var(--color-border-soft);
   border-radius: 0;
-  padding: var(--s1) var(--s2);
+  padding: var(--space-4) var(--space-8);
 }

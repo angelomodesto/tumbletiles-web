@@ -11,6 +11,8 @@ interface TutorialBoardProps {
   onPlaceRobot: (cell: number) => void
   onPlaceWall: (cell: number) => void
   onErase: (cell: number) => void
+  /** Called when a click could not do anything, with the reason to show. */
+  onBlocked?: (reason: string) => void
 }
 
 /**
@@ -27,13 +29,24 @@ function TutorialBoard({
   onPlaceRobot,
   onPlaceWall,
   onErase,
+  onBlocked,
 }: TutorialBoardProps) {
   const handleCell = (cell: number) => {
     const occupied = robots.includes(cell) || walls.includes(cell)
 
-    if (tool === 'robot' && allowed.includes('robot') && !occupied) onPlaceRobot(cell)
-    if (tool === 'wall' && allowed.includes('wall') && !occupied) onPlaceWall(cell)
-    if (tool === 'erase' && allowed.includes('erase') && occupied) onErase(cell)
+    if (tool === 'erase') {
+      if (occupied) onErase(cell)
+      else onBlocked?.('That square is already empty. Click a robot or a wall to erase it.')
+      return
+    }
+
+    if (occupied) {
+      onBlocked?.('That square is taken. Try an empty one.')
+      return
+    }
+
+    if (tool === 'robot') onPlaceRobot(cell)
+    if (tool === 'wall') onPlaceWall(cell)
   }
 
   return (

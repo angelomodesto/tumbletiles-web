@@ -13,6 +13,8 @@ const ARROWS: { direction: Direction; glyph: string; label: string }[] = [
 interface DemoProps {
   /** Called when the viewer chooses to continue, or skips. */
   onDone: () => void
+  /** Called when the viewer wants to go straight to the simulator. */
+  onSkip: () => void
 }
 
 /**
@@ -21,7 +23,7 @@ interface DemoProps {
  * frames come from the real engine, so this is the model running rather than an
  * imitation of it.
  */
-function Demo({ onDone }: DemoProps) {
+function Demo({ onDone, onSkip }: DemoProps) {
   const frames = useMemo(() => buildDemoFrames(), [])
   const stepCount = useMemo(() => countSteps(frames), [frames])
   const [index, setIndex] = useState(0)
@@ -52,6 +54,14 @@ function Demo({ onDone }: DemoProps) {
     if (target >= 0) setIndex(target)
   }
 
+  // Every caption shown so far in this step, in order and without repeats, so
+  // a line stays on screen instead of being replaced before it can be read.
+  const shown = frames.slice(0, (reducedMotion ? lastOfStep : index) + 1)
+  const captions = shown
+    .filter((f) => f.step === currentStep)
+    .map((f) => f.caption)
+    .filter((caption, i, all) => all.indexOf(caption) === i)
+
   const cells = DEMO_SCRIPT.cols * DEMO_SCRIPT.rows
   const robots = new Set(frame.robots)
   const walls = new Set(frame.walls)
@@ -59,7 +69,11 @@ function Demo({ onDone }: DemoProps) {
   return (
     <div className="demo-page">
       <h1>How Tumble Tiles works</h1>
-      <p className="demo-caption">{frame.caption}</p>
+      <div className="demo-caption">
+        {captions.map((caption) => (
+          <p key={caption}>{caption}</p>
+        ))}
+      </div>
 
       <div className="demo-stage">
         <div
@@ -81,13 +95,13 @@ function Demo({ onDone }: DemoProps) {
           ))}
         </div>
 
-        <div className="demo-arrows">
+        <div className="arrow-pad">
           {ARROWS.map(({ direction, glyph, label }) => {
             const active = frame.direction === direction
             return (
               <span
                 key={direction}
-                className={'demo-arrow' + (active ? ' active-tool' : '')}
+                className={active ? 'active-tool' : undefined}
                 aria-label={active ? 'applying ' + label : undefined}
               >
                 {glyph}
@@ -97,11 +111,16 @@ function Demo({ onDone }: DemoProps) {
         </div>
       </div>
 
-      <div className="demo-progress">
-        <span
-          className="demo-progress-bar"
-          style={{ width: `${Math.round(((currentStep + 1) / stepCount) * 100)}%` }}
-        ></span>
+      <div className="step-meter">
+        <span className="step-count">
+          Step {currentStep + 1} of {stepCount}
+        </span>
+        <span className="step-progress">
+          <span
+            className="step-progress-bar"
+            style={{ width: `${Math.round(((currentStep + 1) / stepCount) * 100)}%` }}
+          ></span>
+        </span>
       </div>
 
       <div className="demo-controls">
@@ -128,14 +147,11 @@ function Demo({ onDone }: DemoProps) {
           </button>
         )}
 
-        <button type="button" onClick={onDone}>
-          Skip
+        <button type="button" onClick={onSkip}>
+          Skip to Simulator
         </button>
       </div>
 
-      <p className="demo-step-count">
-        Step {currentStep + 1} of {stepCount}
-      </p>
     </div>
   )
 }

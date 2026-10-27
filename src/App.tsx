@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react'
-import type { CSSProperties } from 'react' // Lets the page use state and respond to keyboard controls
+import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties, ReactNode } from 'react' // Lets the page use state and respond to keyboard controls
 import './App.css'
 import Demo from './Demo.tsx'
+import LandingPreview from './LandingPreview.tsx'
+import SiteHeader from './SiteHeader.tsx'
+import type { Page } from './SiteHeader.tsx'
+import { hasVisited, markVisited } from './visited'
 import TutorialBoard from './TutorialBoard.tsx'
+import TutorialStep from './TutorialStep.tsx'
 import { TOOLS, TUTORIAL_SIZE } from './tutorialTools'
 import type { Tool } from './tutorialTools'
 import { cellSizeFor } from './boardLayout'
@@ -45,7 +50,8 @@ function App() {
   const [tutorialHasErased, setTutorialHasErased] = useState(false) // Remembers if the user erased an object
   const [tutorialRobots, setTutorialRobots] = useState<number[]>([]) // Stores robots placed on the tutorial board
   const [tutorialWalls, setTutorialWalls] = useState<number[]>([]) // Stores walls placed on the tutorial board
-  const [tutorialHasMoved, setTutorialHasMoved] = useState(false) // Tracks whether the user has moved the tutorial robot
+  const [tutorialHasMoved, setTutorialHasMoved] = useState(false)
+  const [tutorialHint, setTutorialHint] = useState('') // Explains why a click did nothing // Tracks whether the user has moved the tutorial robot
   const [selectedTool, setSelectedTool] = useState('robot') // Tracks which board tool is currently selected
   const [robots, setRobots] = useState<number[]>([]) // Stores which board cells contain robots
   const [walls, setWalls] = useState<number[]>([]) // Stores which board cells contain walls
@@ -60,6 +66,15 @@ function App() {
   const [glueFunction, setGlueFunction] = useState<GlueFunction>(DEFAULT_GLUE_FUNCTION) // How strongly each glue label bonds
   const [presets, setPresets] = useState<Preset[]>([]) // The configurations that ship with the simulator
   const [loadError, setLoadError] = useState('') // Explains why a file or preset could not be loaded
+  const [loadingPreset, setLoadingPreset] = useState('') // Name of the configuration being fetched
+  const [commandCount, setCommandCount] = useState(0) // How many commands have been given
+  const [lastCommand, setLastCommand] = useState('') // The most recent command, for the status bar
+  const [undoSnapshot, setUndoSnapshot] = useState<null | { robots: number[]; walls: number[]; glues: Record<number, Glues> }>(null)
+  const [showShortcuts, setShowShortcuts] = useState(false)
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth < 600,
+  ) // Drives the simulator's note; the board needs room to be usable
+  const [visited, setVisited] = useState(hasVisited) // Decides which landing action is emphasised // Explains why a file or preset could not be loaded
   const [widthText, setWidthText] = useState('15') // What the width field shows while it is being typed in
   const [heightText, setHeightText] = useState('15') // What the height field shows while it is being typed in
   /** Loads a parsed configuration onto the simulator board. */
@@ -82,6 +97,9 @@ function App() {
     }
     setTileGlues(glues)
     setLoadError('')
+    setUndoSnapshot(null) // The cleared board is gone once something else is loaded
+    setCommandCount(0)
+    setLastCommand('')
   }
 
   const handleImport = async (file: File) => { // Handles the XML file selected by the user
@@ -95,12 +113,15 @@ function App() {
   /** Loads one of the configurations that ship with the simulator. */
   const handleLoadPreset = async (preset: Preset) => {
     setLoadError('')
+    setLoadingPreset(preset.name) // Shown in the board's place while the file is fetched
     try {
       const response = await fetch(`${import.meta.env.BASE_URL}presets/${preset.file}`)
       if (!response.ok) throw new Error(`Could not fetch ${preset.file}.`)
       loadConfiguration(parseConfiguration(await response.text()))
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'That preset could not be loaded.')
+    } finally {
+      setLoadingPreset('')
     }
   }
 
@@ -127,6 +148,71 @@ function App() {
   }
 
 
+  /** Sends the viewer to the landing page from wherever they are. */
+  const goHome = () => {
+    resetTutorial()
+    setShowTutorial(false)
+    setShowDemo(false)
+    setShowSimulator(false)
+  }
+
+  /** Opens onboarding, which starts with the animation. */
+  const goToTutorial = () => {
+    resetTutorial()
+    setShowSimulator(false)
+    setShowTutorial(false)
+    setShowDemo(true)
+  }
+
+  /** Opens the simulator, and remembers that onboarding has been seen. */
+  const goToSimulator = () => {
+    resetTutorial()
+    setShowDemo(false)
+    setShowTutorial(false)
+    setShowSimulator(true)
+    markVisited()
+    setVisited(true)
+  }
+
+  /**
+   * Every screen is returned through here, so the header occupies exactly the
+   * same position on all of them rather than sitting inside each page's own
+   * container and inheriting its padding.
+   */
+  const shell = (current: Page, content: ReactNode) => (
+    <div className="app-shell">
+      <SiteHeader
+        current={current}
+        onHome={goHome}
+        onTutorial={goToTutorial}
+        onSimulator={goToSimulator}
+      />
+      <main className="app-main">{content}</main>
+    </div>
+  )
+
+  /** Puts the tutorial back to its first step with an empty board. */
+  const resetTutorial = () => {
+    setTutorialStep(1)
+    setTutorialRobots([])
+    setTutorialWalls([])
+    setTutorialHasMoved(false)
+    setTutorialWallPlaced(false)
+    setTutorialRobotPlaced(false)
+    setTutorialHasErased(false)
+    setTutorialTool('wall')
+    setTutorialHint('')
+  }
+
+  /** Leaves for the landing page. */
+  const leaveTutorial = goHome
+
+  /** Leaves straight for the simulator, from any step. */
+  const skipToSimulator = goToSimulator
+
+  /** Starts the tutorial again from step 1. */
+  const restartTutorial = () => resetTutorial()
+
   /** The only tool each hands-on step allows. Step 5 unlocks all of them. */
   const TOOL_FOR_STEP: Record<number, Tool> = { 2: 'wall', 3: 'robot', 4: 'erase' }
 
@@ -136,6 +222,7 @@ function App() {
    */
   const goToTutorialStep = (step: number) => {
     setTutorialStep(step)
+    setTutorialHint('') // A hint belongs to the step that produced it
     const tool = TOOL_FOR_STEP[step]
     if (tool !== undefined) setTutorialTool(tool)
   }
@@ -172,7 +259,10 @@ function App() {
 
   // Keeps the board sized to the window as it changes.
   useEffect(() => {
-    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
+    const onResize = () => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight })
+      setIsNarrow(window.innerWidth < 600)
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
@@ -223,62 +313,116 @@ function App() {
     setTileGlues(glues)
   }
 
-  const moveUp = () => applyMove('N') // Moves all robots upward
-  const moveDown = () => applyMove('S') // Moves all robots downward
-  const moveLeft = () => applyMove('W') // Moves all robots to the left
-  const moveRight = () => applyMove('E') // Moves all robots to the right
+  const DIRECTION_NAMES: Record<Direction, string> = { N: 'Up', E: 'Right', S: 'Down', W: 'Left' }
+
+  /** Applies a command and records it for the status bar. The movement itself is unchanged. */
+  const runCommand = (direction: Direction) => {
+    applyMove(direction)
+    setCommandCount((count) => count + 1)
+    setLastCommand(DIRECTION_NAMES[direction])
+  }
+
+  const moveUp = () => runCommand('N') // Moves all robots upward
+  const moveDown = () => runCommand('S') // Moves all robots downward
+  const moveLeft = () => runCommand('W') // Moves all robots to the left
+  const moveRight = () => runCommand('E') // Moves all robots to the right
+
+  /** Clears the board, keeping a snapshot so the clear can be undone. */
+  const clearBoard = () => {
+    setUndoSnapshot({ robots, walls, glues: tileGlues })
+    setRobots([])
+    setWalls([])
+    setTileGlues({})
+    setStorageWidth(boardWidth)
+    setLoadError('')
+  }
+
+  /** Puts back whatever the last clear removed. */
+  const undoClear = () => {
+    if (undoSnapshot === null) return
+    setRobots(undoSnapshot.robots)
+    setWalls(undoSnapshot.walls)
+    setTileGlues(undoSnapshot.glues)
+    setUndoSnapshot(null)
+  }
+
+  /**
+   * Handles one arrow key, using whatever is on the board right now. Returns
+   * whether the key was used, so the page only stops scrolling when it was.
+   */
+  const handleArrow = (direction: Direction): boolean => {
+    if (showSimulator) {
+      runCommand(direction)
+      return true
+    }
+
+    if (showTutorial && tutorialStep === 5) {
+      applyTutorialMove(direction)
+      return true
+    }
+
+    return false
+  }
+
+  // The listener is attached once, but it must always see the current board.
+  // Holding the handler in a ref does that; listing the board in the effect's
+  // dependencies instead left the listener holding a stale copy, which made
+  // robots jump back to an earlier position when an arrow key was pressed.
+  const handleArrowRef = useRef(handleArrow)
+
+  useEffect(() => {
+    handleArrowRef.current = handleArrow
+  })
+
+  /** Tool and help keys, which only apply in the simulator. */
+  const handleShortcut = (key: string): boolean => {
+    if (!showSimulator) return false
+
+    const tools: Record<string, string> = { r: 'robot', w: 'wall', e: 'erase' }
+    const tool = tools[key.toLowerCase()]
+
+    if (tool !== undefined) {
+      setSelectedTool(tool)
+      return true
+    }
+
+    if (key === '?') {
+      setShowShortcuts((shown) => !shown)
+      return true
+    }
+
+    return false
+  }
+
+  const shortcutsRef = useRef(handleShortcut)
+
+  useEffect(() => {
+    shortcutsRef.current = handleShortcut
+  })
 
   useEffect(() => { // Listens for keyboard arrow key presses
+    const DIRECTION_KEYS: Record<string, Direction> = {
+      ArrowUp: 'N',
+      ArrowRight: 'E',
+      ArrowDown: 'S',
+      ArrowLeft: 'W',
+    }
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (!showSimulator && !showTutorial) return // Only uses arrow keys in the simulator or tutorial
+      // Never steal a key from a field the viewer is typing in.
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
 
-      if (event.key === 'ArrowUp') {
-        event.preventDefault() // Prevents the page from scrolling
-
-        if (showSimulator) {
-          moveUp() // Moves robots up in the real simulator
+      const direction = DIRECTION_KEYS[event.key]
+      if (direction !== undefined) {
+        if (handleArrowRef.current(direction)) {
+          event.preventDefault() // Prevents the page from scrolling
         }
-
-        if (showTutorial && tutorialStep === 5) {
-          applyTutorialMove('N') // Moves the tutorial robots with the engine
-        }
+        return
       }
 
-      if (event.key === 'ArrowDown') {
-        event.preventDefault() // Prevents the page from scrolling
-
-        if (showSimulator) {
-          moveDown() // Moves robots down in the real simulator
-        }
-
-        if (showTutorial && tutorialStep === 5) {
-          applyTutorialMove('S') // Moves the tutorial robots with the engine
-        }
-      }
-
-      if (event.key === 'ArrowLeft') {
-        event.preventDefault() // Prevents the page from scrolling
-
-        if (showSimulator) {
-          moveLeft() // Moves robots left in the real simulator
-        }
-
-        if (showTutorial && tutorialStep === 5) {
-          applyTutorialMove('W') // Moves the tutorial robots with the engine
-        }
-      }
-
-      if (event.key === 'ArrowRight') {
-        event.preventDefault() // Prevents the page from scrolling
-
-        if (showSimulator) {
-          moveRight() // Moves robots right in the real simulator
-        }
-
-        if (showTutorial && tutorialStep === 5) {
-          applyTutorialMove('E') // Moves the tutorial robots with the engine
-        }
-      }
+      if (shortcutsRef.current(event.key)) event.preventDefault()
     }
 
     window.addEventListener('keydown', handleKeyDown) // Starts listening for key presses
@@ -286,7 +430,7 @@ function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown) // Stops listening when no longer needed
     }
-  }, [showSimulator, showTutorial, tutorialStep, robots, walls])
+  }, [])
 
 
 
@@ -294,36 +438,20 @@ function App() {
   // The animation plays before the tutorial, so a new visitor sees the model
   // run once before being asked to build a board themselves.
   if (showDemo) {
-    return (
-      <Demo
-        onDone={() => {
-          setShowDemo(false) // Ends the animation
-          setShowTutorial(true) // Hands over to the interactive steps
-        }}
-      />
-    )
+    return shell('tutorial', (
+        <Demo
+          onDone={() => {
+            setShowDemo(false) // Ends the animation
+            setShowTutorial(true) // Hands over to the interactive steps
+          }}
+          onSkip={goToSimulator} /* Straight to the simulator */
+        />
+      ))
   }
 
 if (showTutorial) {
-  return (
+  return shell('tutorial', (
     <div className="tutorial-page"> {/* Main tutorial page */}
-
-      <button
-        type="button"
-        onClick={() => {
-          goToTutorialStep(1) // Resets to Step 1
-          setTutorialRobots([]) // Clears tutorial robots
-          setTutorialWalls([]) // Clears tutorial walls
-          setTutorialHasMoved(false) // Resets movement progress
-          setTutorialWallPlaced(false) // Resets wall progress
-          setTutorialRobotPlaced(false) // Resets robot progress
-          setTutorialHasErased(false) // Resets erase progress
-          setTutorialTool('wall') // Selects Wall as the starting tool
-          setShowTutorial(false) // Returns to home
-        }}
-      >
-        ← Back to Home
-      </button>
 
       <h1>Tumble Tiles Tutorial</h1> {/* Tutorial page title */}
 
@@ -334,35 +462,31 @@ if (showTutorial) {
       <div className="tutorial-content"> {/* Holds the current tutorial step */}
 
         {tutorialStep === 1 && (
-          <div> {/* Shows the introduction only during step 1 */}
-
-            <h2>Step 1: Introduction</h2>
-
-            <p>
-              Tumble Tiles lets you place robots and obstacles on a board and move the robots in different directions.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => setTutorialStep(2)} /* Moves to tutorial step 2 */
-            >
-              Next →
-            </button>
-
-          </div>
+          <TutorialStep
+            step={1}
+            title="What you will do"
+            instruction="Build a small board, then move everything on it with one command."
+            done
+            successText="Ready when you are."
+            onBack={leaveTutorial}
+            onNext={() => goToTutorialStep(2)}
+            onSkip={skipToSimulator}
+          />
         )}
 
 
         {tutorialStep === 2 && (
-          <div> {/* Shows the wall instructions only during step 2 */}
-
-            <h2>Step 2: Place a Wall</h2>
-
-            <p>
-              Walls never move. Click any empty square to place one. Only the Wall tool
-              is available on this step.
-            </p>
-
+          <TutorialStep
+            step={2}
+            title="Place a wall"
+            instruction="Click an empty square to place a wall. Walls never move."
+            done={tutorialWallPlaced}
+            successText="Wall placed. It will stay exactly there."
+            hint={tutorialHint}
+            onBack={() => goToTutorialStep(1)}
+            onNext={() => goToTutorialStep(3)}
+            onSkip={skipToSimulator}
+          >
             <TutorialBoard
               robots={tutorialRobots}
               walls={tutorialWalls}
@@ -373,36 +497,27 @@ if (showTutorial) {
               onPlaceWall={(cell) => {
                 setTutorialWalls([...tutorialWalls, cell]) // Places a wall
                 setTutorialWallPlaced(true) // Records that the step is done
+                setTutorialHint('') // Clears any earlier hint
               }}
               onErase={() => {}}
+              onBlocked={setTutorialHint}
             />
-
-            <div className="tutorial-nav">
-              <button type="button" onClick={() => goToTutorialStep(1)}>
-                ← Back
-              </button>
-
-              {tutorialWallPlaced && (
-                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(3)}>
-                  Next →
-                </button>
-              )}
-            </div>
-
-          </div>
+          </TutorialStep>
         )}
 
 
         {tutorialStep === 3 && (
-          <div> {/* Shows the robot instructions only during step 3 */}
-
-            <h2>Step 3: Place a Robot</h2>
-
-            <p>
-              Robots are what the commands move. Click an empty square to place one.
-              Your wall from the last step is still there.
-            </p>
-
+          <TutorialStep
+            step={3}
+            title="Place a robot"
+            instruction="Click an empty square to place a robot. Your wall is still there."
+            done={tutorialRobotPlaced}
+            successText="Robot placed. Add more if you like."
+            hint={tutorialHint}
+            onBack={() => goToTutorialStep(2)}
+            onNext={() => goToTutorialStep(4)}
+            onSkip={skipToSimulator}
+          >
             <TutorialBoard
               robots={tutorialRobots}
               walls={tutorialWalls}
@@ -412,37 +527,28 @@ if (showTutorial) {
               onPlaceRobot={(cell) => {
                 setTutorialRobots([...tutorialRobots, cell]) // Places a robot
                 setTutorialRobotPlaced(true) // Records that the step is done
+                setTutorialHint('')
               }}
               onPlaceWall={() => {}}
               onErase={() => {}}
+              onBlocked={setTutorialHint}
             />
-
-            <div className="tutorial-nav">
-              <button type="button" onClick={() => goToTutorialStep(2)}>
-                ← Back
-              </button>
-
-              {tutorialRobotPlaced && (
-                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(4)}>
-                  Next →
-                </button>
-              )}
-            </div>
-
-          </div>
+          </TutorialStep>
         )}
 
 
         {tutorialStep === 4 && (
-          <div> {/* Shows the erase instructions only during step 4 */}
-
-            <h2>Step 4: Use Erase</h2>
-
-            <p>
-              Erase removes whatever is in a square. Click one of the robots or walls
-              you placed to take it off the board.
-            </p>
-
+          <TutorialStep
+            step={4}
+            title="Erase something"
+            instruction="Click a robot or a wall to take it off the board."
+            done={tutorialHasErased}
+            successText="Erased. Put it back if you want it."
+            hint={tutorialHint}
+            onBack={() => goToTutorialStep(3)}
+            onNext={() => goToTutorialStep(5)}
+            onSkip={skipToSimulator}
+          >
             <TutorialBoard
               robots={tutorialRobots}
               walls={tutorialWalls}
@@ -455,36 +561,26 @@ if (showTutorial) {
                 setTutorialRobots(tutorialRobots.filter((c) => c !== cell)) // Removes a robot
                 setTutorialWalls(tutorialWalls.filter((c) => c !== cell)) // Removes a wall
                 setTutorialHasErased(true) // Records that the step is done
+                setTutorialHint('')
               }}
+              onBlocked={setTutorialHint}
             />
-
-            <div className="tutorial-nav">
-              <button type="button" onClick={() => goToTutorialStep(3)}>
-                ← Back
-              </button>
-
-              {tutorialHasErased && (
-                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(5)}>
-                  Next →
-                </button>
-              )}
-            </div>
-
-          </div>
+          </TutorialStep>
         )}
 
 
         {tutorialStep === 5 && (
-          <div> {/* Shows the movement instructions only during step 5 */}
-
-            <h2>Step 5: Move the Robots</h2>
-
-            <p>
-              Every command moves all robots at once. They keep going until they reach the
-              edge of the board, a wall, or another robot. All three tools are available
-              now, so build a board and try it.
-            </p>
-
+          <TutorialStep
+            step={5}
+            title="Move the robots"
+            instruction="Press an arrow, or use the arrow keys. Every robot moves at once."
+            done={tutorialHasMoved}
+            successText="They stopped at a wall, an edge, or another robot."
+            hint={tutorialHint}
+            onBack={() => goToTutorialStep(4)}
+            onNext={() => goToTutorialStep(6)}
+            onSkip={skipToSimulator}
+          >
             <TutorialBoard
               robots={tutorialRobots}
               walls={tutorialWalls}
@@ -497,72 +593,48 @@ if (showTutorial) {
                 setTutorialRobots(tutorialRobots.filter((c) => c !== cell))
                 setTutorialWalls(tutorialWalls.filter((c) => c !== cell))
               }}
+              onBlocked={setTutorialHint}
             />
 
-            <div className="tutorial-movement"> {/* Holds the tutorial movement buttons */}
+            <div className="arrow-pad"> {/* Movement controls, laid out like arrow keys */}
               <button type="button" onClick={() => applyTutorialMove('N')}>↑</button>
               <button type="button" onClick={() => applyTutorialMove('W')}>←</button>
               <button type="button" onClick={() => applyTutorialMove('S')}>↓</button>
               <button type="button" onClick={() => applyTutorialMove('E')}>→</button>
             </div>
-
-            <div className="tutorial-nav">
-              <button type="button" onClick={() => goToTutorialStep(4)}>
-                ← Back
-              </button>
-
-              {tutorialHasMoved && (
-                <button type="button" className="tutorial-button" onClick={() => goToTutorialStep(6)}>
-                  Next →
-                </button>
-              )}
-            </div>
-
-          </div>
+          </TutorialStep>
         )}
 
 
         {tutorialStep === 6 && (
-          <div> {/* Shows the final tutorial step */}
+          <TutorialStep
+            step={6}
+            title="That is the whole model"
+            instruction="One command moves every robot until something stops it. The simulator works the same way, with bigger boards and saved configurations."
+            done
+            successText="Tutorial complete."
+            footer={
+              <div className="tutorial-nav">
+                <button type="button" onClick={() => goToTutorialStep(5)}>
+                  ← Back
+                </button>
 
-            <h2>Step 6: Tutorial Complete!</h2>
+                <button type="button" className="tutorial-button" onClick={skipToSimulator}>
+                  Open Simulator →
+                </button>
 
-            <p>
-              You now know the basics of using the Tumble Tiles simulator. You can place robots and walls, erase objects, and move robots around the board.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => goToTutorialStep(5)}
-            >
-              ← Back
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                goToTutorialStep(1) // Resets to Step 1
-                setTutorialRobots([]) // Clears tutorial robots
-                setTutorialWalls([]) // Clears tutorial walls
-                setTutorialHasMoved(false) // Resets movement progress
-                setTutorialWallPlaced(false) // Resets wall progress
-                setTutorialRobotPlaced(false) // Resets robot progress
-                setTutorialHasErased(false) // Resets erase progress
-                setTutorialTool('wall') // Selects Wall as the starting tool
-                setShowTutorial(false) // Leaves the tutorial
-                setShowSimulator(true) // Drops straight into the simulator
-              }}
-            >
-              Finish Tutorial
-            </button>
-
-          </div>
+                <button type="button" className="tutorial-skip" onClick={restartTutorial}>
+                  Replay tutorial
+                </button>
+              </div>
+            }
+          />
         )}
 
       </div> {/* Closes tutorial content */}
 
     </div> /* Closes tutorial page */
-  )
+  ))
 }
 
 
@@ -573,310 +645,320 @@ if (showTutorial) {
 
   // Simulator page
   if (showSimulator) {
-    return (
+    const isEmpty = robots.length === 0 && walls.length === 0
+
+    return shell('simulator', (
       <div className="simulator-page"> {/* Main simulator page */}
 
-        <button
-          type="button"
-          onClick={() => setShowSimulator(false)} /* Returns to the landing page */
-        >
-          ← Back to Home
-        </button>
+        <h1>Tumble Tiles Simulator</h1>
 
-        <h1>Tumble Tiles Simulator</h1> {/* Simulator page title */}
+        <div className="simulator-layout"> {/* Controls beside the board, which is the main thing */}
 
-        <p>
-          Build, control, and experiment with Tumble Tiles.
-        </p> {/* Short description of the simulator */}
+          <aside className="simulator-controls">
 
-        <div className="simulator-tools"> {/* Holds the tools used to edit the board */}
-          <h2>Tools</h2> {/* Tools section title */}
+            {/* Most used, so it comes first. */}
+            <section className="control-panel">
+              <h2>Commands</h2>
 
-          <button
-            type="button"
-            className={selectedTool === 'robot' ? 'active-tool' : ''} /* Highlights Robot when selected */
-            onClick={() => setSelectedTool('robot')} /* Selects the Robot tool */
-          >
-            Robot
-          </button>
+              <div className="arrow-pad">
+                <button type="button" onClick={moveUp} title="Move all robots up (↑)">↑</button>
+                <button type="button" onClick={moveLeft} title="Move all robots left (←)">←</button>
+                <button type="button" onClick={moveDown} title="Move all robots down (↓)">↓</button>
+                <button type="button" onClick={moveRight} title="Move all robots right (→)">→</button>
+              </div>
 
-          <button
-            type="button"
-            className={selectedTool === 'wall' ? 'active-tool' : ''} /* Highlights Wall when selected */
-            onClick={() => setSelectedTool('wall')} /* Selects the Wall tool */
-          >
-            Wall
-          </button>
+              <p className="control-hint">Arrow keys work too.</p>
+            </section>
 
-          <button
-            type="button"
-            className={selectedTool === 'erase' ? 'active-tool' : ''} /* Highlights Erase when selected */
-            onClick={() => setSelectedTool('erase')} /* Selects the Erase tool */
-          >
-            Erase
-          </button>
+            <section className="control-panel">
+              <h2>Tools</h2>
 
-          <label className="import-button">
-            Import XML
-            <input
-              type="file"
-              accept=".xml"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const file = e.target.files?.[0] // Gets the selected file
+              <div className="control-row">
+                <button
+                  type="button"
+                  title="Place robots (R)"
+                  className={selectedTool === 'robot' ? 'active-tool' : ''}
+                  onClick={() => setSelectedTool('robot')}
+                >
+                  Robot
+                </button>
 
-                if (file) {
-                  void handleImport(file) // Imports the XML file
-                }
+                <button
+                  type="button"
+                  title="Place walls (W)"
+                  className={selectedTool === 'wall' ? 'active-tool' : ''}
+                  onClick={() => setSelectedTool('wall')}
+                >
+                  Wall
+                </button>
 
-                e.target.value = '' // Allows selecting the same file again
-              }}
-            />
-          </label>
+                <button
+                  type="button"
+                  title="Remove robots and walls (E)"
+                  className={selectedTool === 'erase' ? 'active-tool' : ''}
+                  onClick={() => setSelectedTool('erase')}
+                >
+                  Erase
+                </button>
+              </div>
+            </section>
 
+            {/* Saved boards and files belong together, away from the editing tools. */}
+            <section className="control-panel">
+              <h2>Configurations</h2>
 
-          <button onClick={handleExport} className="import-button">
-            Export XML
-          </button>
+              {presets.length > 0 && (
+                <select
+                  value=""
+                  aria-label="Load a configuration"
+                  onChange={(event) => {
+                    const preset = presets.find((item) => item.id === event.target.value)
+                    if (preset !== undefined) void handleLoadPreset(preset)
+                  }}
+                >
+                  <option value="">Load a configuration…</option>
+                  {presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name} — {preset.cols}x{preset.rows}, {preset.robots} robots
+                    </option>
+                  ))}
+                </select>
+              )}
 
-        </div> {/* End of Tools */}
+              <div className="control-row">
+                <label className="import-button">
+                  Import XML
+                  <input
+                    type="file"
+                    accept=".xml"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) void handleImport(file)
+                    }}
+                  />
+                </label>
 
+                <button type="button" className="import-button" onClick={handleExport}>
+                  Export XML
+                </button>
+              </div>
+            </section>
 
-        {presets.length > 0 && (
-          <div className="board-presets"> {/* Configurations that ship with the simulator */}
-            <h2>Presets</h2>
+            <section className="control-panel">
+              <h2>Board</h2>
 
-            <select
-              value=""
-              onChange={(event) => {
-                const preset = presets.find((item) => item.id === event.target.value)
-                if (preset !== undefined) void handleLoadPreset(preset)
-              }}
-            >
-              <option value="">Choose a configuration…</option>
-              {presets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name} — {preset.cols}x{preset.rows}, {preset.robots} robots
-                </option>
-              ))}
-            </select>
+              <div className="control-row">
+                <label>
+                  Width
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_BOARD_SIZE}
+                    value={widthText}
+                    onBlur={() => setWidthText(String(boardWidth))}
+                    onChange={(event) => {
+                      setWidthText(event.target.value)
 
-            <span className="board-presets-note">
-              From the research group's verification set.
-            </span>
-          </div>
-        )}
+                      const newWidth = Number(event.target.value)
+                      if (!Number.isInteger(newWidth) || newWidth < 1 || newWidth > MAX_BOARD_SIZE) return
 
-        {loadError !== '' && (
-          <p className="board-error" role="alert">
-            {loadError}
-          </p>
-        )}
+                      const newStorageWidth = Math.max(storageWidth, newWidth)
 
+                      setRobots(robots.map((index) => {
+                        const x = index % storageWidth
+                        const y = Math.floor(index / storageWidth)
+                        return y * newStorageWidth + x
+                      }))
 
+                      setWalls(walls.map((index) => {
+                        const x = index % storageWidth
+                        const y = Math.floor(index / storageWidth)
+                        return y * newStorageWidth + x
+                      }))
 
-        <div className="board-settings"> {/* Holds settings for the simulator board */}
-          <h2>Board Settings</h2> {/* Board settings title */}
+                      setStorageWidth(newStorageWidth)
+                      setBoardWidth(newWidth)
+                    }}
+                  />
+                </label>
 
-          <label>
-            Width:
-            <input
-              type="number"
-              min={1}
-              max={MAX_BOARD_SIZE}
-              value={widthText}
-              onBlur={() => setWidthText(String(boardWidth))} /* Puts back the real width if the field was left empty */
-              onChange={(event) => {
-                setWidthText(event.target.value) // Always lets the field show what was typed, including empty
+                <label>
+                  Height
+                  <input
+                    type="number"
+                    min={1}
+                    max={MAX_BOARD_SIZE}
+                    value={heightText}
+                    onBlur={() => setHeightText(String(boardHeight))}
+                    onChange={(event) => {
+                      setHeightText(event.target.value)
 
-                const newWidth = Number(event.target.value) // Gets the new width
+                      const newHeight = Number(event.target.value)
+                      if (!Number.isInteger(newHeight) || newHeight < 1 || newHeight > MAX_BOARD_SIZE) return
 
-                // An empty or out-of-range field is left alone until it is valid,
-                // so the board is not resized half way through typing a number.
-                if (!Number.isInteger(newWidth) || newWidth < 1 || newWidth > MAX_BOARD_SIZE) return
+                      setBoardHeight(newHeight)
+                    }}
+                  />
+                </label>
+              </div>
 
-                const newStorageWidth = Math.max(storageWidth, newWidth) // Keeps space for hidden objects
+              <p className="control-hint">Up to {MAX_BOARD_SIZE} × {MAX_BOARD_SIZE}.</p>
+            </section>
 
-                // Updates robot positions using the storage width
-                setRobots(robots.map((index) => {
-                  const x = index % storageWidth // Original column
-                  const y = Math.floor(index / storageWidth) // Original row
+            {/* Destructive, so it sits apart from the settings, with Undo in the status bar. */}
+            <div className="control-danger">
+              <button type="button" onClick={clearBoard} title="Remove every robot and wall">
+                Clear board
+              </button>
+            </div>
 
-                  return y * newStorageWidth + x // Preserves the original coordinates
-                }))
+          </aside>
 
-                // Updates wall positions using the storage width
-                setWalls(walls.map((index) => {
-                  const x = index % storageWidth // Original column
-                  const y = Math.floor(index / storageWidth) // Original row
+          <main className="simulator-stage">
+            {isNarrow && (
+              <p className="narrow-note">
+                This screen is narrow for a board. Everything still works, but the board scrolls
+                inside its panel — a wider screen is easier. The tutorial reads well at this size.
+              </p>
+            )}
 
-                  return y * newStorageWidth + x // Preserves the original coordinates
-                }))
+            <div className="board-panel"> {/* Height is reserved so loading never shifts the page */}
+              {loadingPreset !== '' ? (
+                <p className="board-message">Loading {loadingPreset}…</p>
+              ) : (
+                <>
+                  <div
+                    className="board-grid"
+                    style={{
+                      '--cell': `${cellSize}px`,
+                      gridTemplateColumns: `repeat(${boardWidth}, ${cellSize}px)`,
+                      gridTemplateRows: `repeat(${boardHeight}, ${cellSize}px)`,
+                    } as CSSProperties}
+                  >
+                    {Array.from({ length: boardWidth * boardHeight }).map((_, index) => {
+                      const { x, y } = fromIndex(index, boardWidth)
+                      const storedIndex = y * storageWidth + x
 
-                setStorageWidth(newStorageWidth) // Updates the storage width
-                setBoardWidth(newWidth) // Updates the visible width
-              }}
-            />
-          </label>
+                      return (
+                        <div
+                          className={`board-cell ${robots.includes(storedIndex) ? 'robot' : ''} ${walls.includes(storedIndex) ? 'wall' : ''}`}
+                          key={index}
+                          onClick={() => {
+                            if (selectedTool === 'robot' && !robots.includes(storedIndex) && !walls.includes(storedIndex)) {
+                              setRobots([...robots, storedIndex])
+                            }
 
-          <label>
-            Height:
-            <input
-              type="number"
-              min={1}
-              max={MAX_BOARD_SIZE}
-              value={heightText}
-              onBlur={() => setHeightText(String(boardHeight))} /* Puts back the real height if the field was left empty */
-              onChange={(event) => {
-                setHeightText(event.target.value) // Always lets the field show what was typed, including empty
+                            if (selectedTool === 'wall' && !walls.includes(storedIndex) && !robots.includes(storedIndex)) {
+                              setWalls([...walls, storedIndex])
+                            }
 
-                const newHeight = Number(event.target.value) // Gets the new height
+                            if (selectedTool === 'erase') {
+                              setRobots(robots.filter((robot) => robot !== storedIndex))
+                              setWalls(walls.filter((wall) => wall !== storedIndex))
+                            }
+                          }}
+                        ></div>
+                      )
+                    })}
+                  </div>
 
-                if (!Number.isInteger(newHeight) || newHeight < 1 || newHeight > MAX_BOARD_SIZE) return
+                  {/* Always rendered so the panel keeps its height whether
+                      the board is empty or not. */}
+                  <p className="board-message board-message-empty">
+                    {isEmpty
+                      ? 'Empty board. Pick a tool and click a square, or load a configuration.'
+                      : ''}
+                  </p>
+                </>
+              )}
+            </div>
 
-                setBoardHeight(newHeight) // Changes height without deleting robots or walls
-              }}
-            />
-          </label>
+            {/* What the board is right now, in one line that is always present. */}
+            <div className="status-bar">
+              <span><b>Tool</b> {selectedTool}</span>
+              <span><b>Board</b> {boardWidth} × {boardHeight}</span>
+              <span><b>Robots</b> {robots.length}</span>
+              <span><b>Walls</b> {walls.length}</span>
+              <span><b>Commands</b> {commandCount}</span>
+              <span><b>Last</b> {lastCommand === '' ? '—' : lastCommand}</span>
 
+              {undoSnapshot !== null && (
+                <button type="button" className="status-undo" onClick={undoClear}>
+                  Undo clear
+                </button>
+              )}
+            </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setRobots([]) // Removes all robots from the board
-              setWalls([]) // Removes all walls from the board
-              setStorageWidth(boardWidth) // Nothing is hidden any more, so stop reserving extra columns
-            }}
-          >
-            Clear Board
-          </button>
+            {loadError !== '' && (
+              <p className="board-error" role="alert">{loadError}</p>
+            )}
+
+            {showShortcuts && (
+              <dl className="shortcuts">
+                <dt>↑ ← ↓ →</dt><dd>Move every robot</dd>
+                <dt>R</dt><dd>Robot tool</dd>
+                <dt>W</dt><dd>Wall tool</dd>
+                <dt>E</dt><dd>Erase tool</dd>
+                <dt>?</dt><dd>Hide this list</dd>
+              </dl>
+            )}
+
+            <button type="button" className="shortcuts-toggle" onClick={() => setShowShortcuts(!showShortcuts)}>
+              {showShortcuts ? 'Hide shortcuts' : 'Keyboard shortcuts (?)'}
+            </button>
+          </main>
+
         </div>
-
-
-
-        <div className="simulator-board"> {/* Holds the Tumble Tiles board */} 
-          <h2>Board</h2> {/* Board section title */} 
- 
-          <div
-            className="board-grid"
-            style={{
-              // Drives .board-cell's size as well as the tracks, so the cells
-              // actually shrink rather than overflowing a clamped grid box.
-              '--cell': `${cellSize}px`,
-              gridTemplateColumns: `repeat(${boardWidth}, ${cellSize}px)`,
-              gridTemplateRows: `repeat(${boardHeight}, ${cellSize}px)`,
-            } as CSSProperties} /* Sizes the grid to the board, shrinking the cells so it fits the window */
-          > 
-            {Array.from({ length:  boardWidth * boardHeight }).map((_, index) => (
-              <div 
-                className={`board-cell ${
-                  robots.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)) ? 'robot' : ''
-                } ${
-                  walls.includes(Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)) ? 'wall' : ''
-                }`}
-                key={index}
-                onClick={() => {
-                  // Converts the clicked square into its stored position
-                  const storedIndex = Math.floor(index / boardWidth) * storageWidth + (index % boardWidth)
-
-                  // Places a robot only if the square is empty
-                  if (selectedTool === 'robot' && !robots.includes(storedIndex) && !walls.includes(storedIndex)) {
-                    setRobots([...robots, storedIndex]) // Saves the robot at its stored position
-                  }
-
-                  // Places a wall only if the stored square is empty
-                  if (selectedTool === 'wall' && !walls.includes(storedIndex) && !robots.includes(storedIndex)) {
-                    setWalls([...walls, storedIndex]) // Saves the wall at its stored position
-                  }
-
-                  // Erases a robot or wall from the clicked square
-                  if (selectedTool === 'erase') {
-                    setRobots(robots.filter((robot) => robot !== storedIndex)) // Removes the robot
-                    setWalls(walls.filter((wall) => wall !== storedIndex)) // Removes the wall
-                  }
-                }}
-              ></div> /* Creates one square for the board */
-            ))}
-          </div>
-        </div> {/* Closes the simulator board */}
-
-        <div className="movement-controls"> {/* Holds the controls used to move the robots */}
-          <h2>Movement</h2> {/* Movement controls title */}
-
-          <button
-            type="button"
-            onClick={moveUp} /* Moves the robots upward when clicked */
-          >
-            ↑
-          </button> {/* Moves robots up */}
-
-          <button
-            type="button"
-            onClick={moveLeft} /* Moves the robots to the left when clicked */
-          >
-            ←
-          </button> {/* Moves robots left */}
-          
-          <button
-            type="button"
-            onClick={moveDown} /* Moves the robots downward when clicked */
-          >
-            ↓
-          </button> {/* Moves robots down */}
-          
-          <button
-            type="button"
-            onClick={moveRight} /* Moves the robots to the right when clicked */
-          >
-            →
-          </button> {/* Moves robots right */}
-        </div>
- 
-      </div> 
-    )
+      </div>
+    ))
   }
 
  // Landing page
-  return (
+  return shell('home', (
     <>
       <section id="center" className="landing-page"> {/* Main landing page section */}
-        <div className="landing-intro"> {/* Holds the landing page title and description */}
-          <h1>Tumble Tiles</h1> {/* Main title shown on the landing page */}
-          <p className="landing-description">
-            Explore swarm robotics through an interactive Tumble Tiles simulator.
-          </p> {/* Short description of the simulator */}
+
+        <div className="landing-hero"> {/* Headline and actions */}
+
+          <div className="landing-intro"> {/* The one thing to read first */}
+            <h1>Tumble Tiles</h1>
+            <p className="landing-lede">
+              Give one command. Every robot moves at once.
+            </p>
+            <p className="landing-description">
+              An interactive simulator for the Tumble Tiles model of algorithmic self-assembly,
+              built with the Algorithmic Self-Assembly Research Group at UTRGV.
+            </p>
+          </div>
+
+          <div className="landing-buttons"> {/* Primary action first, secondary beside it */}
+            {/* Both are always offered; only which one dominates changes. */}
+            <button
+              type="button"
+              className={visited ? 'simulator-button landing-secondary' : 'tutorial-button landing-primary'}
+              onClick={goToTutorial}
+            >
+              Start Tutorial
+            </button>
+
+            <button
+              type="button"
+              className={visited ? 'tutorial-button landing-primary' : 'simulator-button landing-secondary'}
+              onClick={goToSimulator}
+            >
+              Open Simulator
+            </button>
+          </div>
+
         </div>
 
-        <div className="landing-buttons"> {/* Holds the landing page buttons */}
-          <button 
-            type="button" 
-            className="tutorial-button" /* Styles the Start Tutorial button */
-            onClick={() => setShowDemo(true)} /* Plays the animation, which then opens the tutorial */
-          > 
-            Start Tutorial
-          </button> {/* Button that will eventually start the tutorial */}
-
-          <button 
-            type="button" 
-            className="simulator-button" /* Styles the Open Simulator button */
-            onClick={() => setShowSimulator(true)} /* Changes to the simulator when clicked */
-          > 
-            Open Simulator
-          </button> {/* Button that will eventually open the simulator */}
-        </div>
-
-        <div className="about-section"> {/* Holds information about Tumble Tiles */}
-          <h2>What is Tumble Tiles?</h2> {/* Heading for the information section */}
-
-          <p>
-            Tumble Tiles is a simulator for experimenting with swarm robotics and tile movement.
-          </p> {/* Brief explanation of Tumble Tiles */}
-        </div>
+        <LandingPreview />
 
       </section>
 
     </>
-  )
+  ))
 }
 
 export default App

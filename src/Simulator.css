@@ -1,0 +1,34 @@
+/* Functional controls reuse the existing monochrome tokens and square borders. */
+.simulator-editor { width: 100%; box-sizing: border-box; }
+.simulator-editor button:disabled { opacity: .5; cursor: not-allowed; }
+.simulator-editor summary { cursor: pointer; font: var(--text-xs) var(--font-mono); }
+.field-label { display: flex; flex-direction: column; gap: var(--space-4); font: var(--text-xs) var(--font-mono); }
+.field-label select, .field-label input { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.field-label input[type='color'] { width: 64px; height: 32px; padding: 2px; }
+.type-editor[open], .type-form { display: flex; flex-direction: column; gap: var(--space-12); }
+.type-form { margin-top: var(--space-12); }
+.rule-option { display: flex; align-items: center; gap: var(--space-8); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.file-input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.import-button:focus-within { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.view-controls { font: var(--text-xs) var(--font-mono); }
+.editor-board-panel { height: min(65vh, 620px); min-height: 380px; align-items: safe center; justify-content: safe center; }
+.editor-grid { position: relative; flex: 0 0 auto; touch-action: none; user-select: none; margin: auto; }
+.editor-grid .board-cell { padding: 0; }
+.editor-grid .board-cell:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -3px; }
+.editor-grid .selected-cell { box-shadow: inset 0 0 0 2px white, inset 0 0 0 4px black; }
+.selection-region { position: absolute; pointer-events: none; border: 2px dashed var(--color-text); background: #7773; box-sizing: border-box; }
+.pan-tool .board-cell { cursor: grab; }
+.pan-tool .board-cell:active { cursor: grabbing; }
+.configuration-dialog { width: min(820px, calc(100vw - 48px)); max-height: 80vh; box-sizing: border-box; padding: var(--space-24); border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); }
+.configuration-dialog::backdrop { background: #11131866; }
+.library-heading { display: flex; justify-content: space-between; align-items: center; gap: var(--space-12); margin-bottom: var(--space-24); }
+.preset-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-16); }
+.preset-card { display: flex; flex-direction: column; gap: var(--space-8); text-align: left; letter-spacing: 0; text-transform: none; padding: var(--space-12); }
+.preset-card svg, .preview-placeholder { width: 100%; height: 150px; border: 1px solid var(--color-border-soft); }
+.preset-card svg { shape-rendering: crispEdges; }
+.preset-card strong, .preset-card span { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .editor-board-panel { min-height: 320px; }
+  .configuration-dialog { padding: var(--space-16); width: calc(100vw - 24px); }
+}
+.simulator-editor button.active-tool:hover { background: var(--color-primary); color: var(--color-on-primary); }

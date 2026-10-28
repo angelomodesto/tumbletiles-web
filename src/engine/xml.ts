@@ -1,4 +1,4 @@
-import type { Board, GlueFunction, Glues } from './types'
+import type { Board, GlueFunction, Glues, RobotType, StickingRule } from './types'
 import { NO_GLUES, addConcrete, addTile, createBoard, fromIndex, toIndex } from './board'
 import { DEFAULT_TEMPERATURE, activateGlues } from './glue'
 
@@ -8,6 +8,10 @@ export interface ConfigTile {
   y: number
   glues: Glues
   isConcrete: boolean
+  typeId?: string
+  color?: string
+  label?: string
+  assembly?: number
 }
 
 /** A whole configuration, as written by the TumbleTiles desktop application. */
@@ -17,6 +21,8 @@ export interface Configuration {
   /** Strength of each glue label, read from the file's GlueFunction. */
   glueFunction: GlueFunction
   tiles: ConfigTile[]
+  robotTypes?: RobotType[]
+  stickingRules?: StickingRule[]
 }
 
 /** Anything that can turn a string of XML into a document. */
@@ -45,6 +51,8 @@ export function parseConfiguration(
 ): Configuration {
   const doc = parser.parseFromString(xmlText, 'application/xml')
 
+  if (doc.getElementsByTagName('parsererror').length > 0) throw new ConfigurationError('Malformed XML.')
+
   const boardSize = doc.getElementsByTagName('BoardSize')[0]
   if (boardSize === undefined) {
     throw new ConfigurationError('This file has no BoardSize, so it is not a board configuration.')
@@ -64,7 +72,7 @@ export function parseConfiguration(
   }
 
   // GlueFunction lists each label and how strongly it bonds.
-  const glueFunction: GlueFunction = {}
+  const glueFunction: GlueFunction = Object.create(null) as GlueFunction
   const functions = doc.getElementsByTagName('Function')
   for (let i = 0; i < functions.length; i++) {
     const label = functions[i].getElementsByTagName('Labels')[0]?.getAttribute('L1')
@@ -104,11 +112,39 @@ export function parseConfiguration(
         y,
         glues: [glue('NorthGlue'), glue('EastGlue'), glue('SouthGlue'), glue('WestGlue')],
         isConcrete: textOf(tile, 'Concrete') === 'True',
+        color: /^[0-9a-f]{6}$/i.test(textOf(tile, 'Color')) ? '#' + textOf(tile, 'Color') : undefined,
+        label: textOf(tile, 'Label'),
+        typeId: textOf(tile, 'TypeId') || undefined,
+        assembly: /^\d+$/.test(textOf(tile, 'Assembly')) ? Number(textOf(tile, 'Assembly')) : undefined,
       })
     }
   }
 
-  return { cols, rows, glueFunction, tiles }
+  const robotTypes: RobotType[] = []
+  const typeNodes = doc.getElementsByTagName('RobotType')
+  for (let i = 0; i < typeNodes.length; i++) {
+    const id = typeNodes[i].getAttribute('id') ?? ''
+    const label = typeNodes[i].getAttribute('label') ?? ''
+    const color = typeNodes[i].getAttribute('color') ?? ''
+    if (!id || !label.trim() || !/^#[0-9a-f]{6}$/i.test(color) || robotTypes.some((t) => t.id === id)) {
+      throw new ConfigurationError('Invalid or duplicate robot type.')
+    }
+    robotTypes.push({ id, label, color })
+  }
+  const stickingRules: StickingRule[] = []
+  const rules = doc.getElementsByTagName('Sticking')
+  for (let i = 0; i < rules.length; i++) {
+    const a = rules[i].getAttribute('a') ?? ''
+    const b = rules[i].getAttribute('b') ?? ''
+    if (![a, b].every((id) => robotTypes.some((t) => t.id === id))) {
+      throw new ConfigurationError('A sticking rule refers to an unknown robot type.')
+    }
+    stickingRules.push([a, b])
+  }
+  if (tiles.some((tile) => tile.typeId && !robotTypes.some((t) => t.id === tile.typeId))) {
+    throw new ConfigurationError('A robot refers to an unknown type.')
+  }
+  return { cols, rows, glueFunction, tiles, robotTypes, stickingRules }
 }
 
 /**
@@ -117,6 +153,8 @@ export function parseConfiguration(
  */
 export function configurationToBoard(config: Configuration): Board {
   const board = createBoard(config.cols, config.rows)
+  board.robotTypes = structuredClone(config.robotTypes ?? [])
+  board.stickingRules = structuredClone(config.stickingRules ?? [])
 
   // Walls first, so a tile can never be placed on one.
   for (const tile of config.tiles) {
@@ -124,9 +162,24 @@ export function configurationToBoard(config: Configuration): Board {
   }
 
   for (const tile of config.tiles) {
-    if (!tile.isConcrete) addTile(board, tile.x, tile.y, tile.glues)
+    if (!tile.isConcrete) {
+      const added = addTile(board, tile.x, tile.y, tile.glues)
+      if (added) Object.assign(added, { typeId: tile.typeId, color: tile.color, label: tile.label })
+    }
   }
 
+  const assemblies = new Map<number, number>()
+  for (const tile of config.tiles) {
+    if (tile.isConcrete || tile.assembly === undefined) continue
+    const poly = board.polyominoes.find((p) => p.tiles.some((t) => t.x === tile.x && t.y === tile.y))
+    if (!poly) continue
+    const previous = assemblies.get(tile.assembly)
+    const target = board.polyominoes.find((p) => p.id === previous)
+    if (target && target !== poly) {
+      for (const t of poly.tiles) { t.polyId = target.id; target.tiles.push(t) }
+      board.polyominoes = board.polyominoes.filter((p) => p !== poly)
+    } else assemblies.set(tile.assembly, poly.id)
+  }
   activateGlues(board, config.glueFunction, DEFAULT_TEMPERATURE)
   return board
 }
@@ -135,6 +188,10 @@ export function configurationToBoard(config: Configuration): Board {
 export interface ExportTile {
   cell: number
   isConcrete: boolean
+  typeId?: string
+  color?: string
+  label?: string
+  assembly?: number
   glues?: Glues
 }
 
@@ -148,23 +205,30 @@ export function serializeConfiguration(
   rows: number,
   tiles: ExportTile[],
   storageWidth: number = cols,
+  glueFunction: GlueFunction = {},
+  robotTypes: RobotType[] = [],
+  stickingRules: StickingRule[] = [],
 ): string {
+  const escape = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
   const tileXml = tiles
     .map((tile) => ({ ...tile, ...fromIndex(tile.cell, storageWidth) }))
     .filter((tile) => tile.x < cols && tile.y < rows)
     .map((tile) => {
       const glues = tile.glues ?? NO_GLUES
-      const label = (value: string) => (value === '' ? '0' : value)
+      const label = (value: string) => (value === '' ? '0' : escape(value))
 
       return `    <Tile>
       <Location x="${tile.x}" y="${tile.y}" />
-      <Color>${tile.isConcrete ? '686868' : '85AFCD'}</Color>
+      <Color>${tile.color?.replace('#', '') ?? (tile.isConcrete ? '686868' : '85AFCD')}</Color>
       <NorthGlue>${label(glues[0])}</NorthGlue>
       <SouthGlue>${label(glues[2])}</SouthGlue>
       <EastGlue>${label(glues[1])}</EastGlue>
       <WestGlue>${label(glues[3])}</WestGlue>
       <Concrete>${tile.isConcrete ? 'True' : 'False'}</Concrete>
-      <Label>0</Label>
+      <Label>${escape(tile.label ?? '0')}</Label>${tile.typeId ? `
+      <TypeId>${escape(tile.typeId)}</TypeId>` : ''}${tile.assembly !== undefined ? `
+      <Assembly>${tile.assembly}</Assembly>` : ''}
     </Tile>`
     })
     .join('\n')
@@ -172,7 +236,15 @@ export function serializeConfiguration(
   return `<?xml version="1.0" encoding="UTF-8"?>
 <TileConfiguration>
   <BoardSize height="${rows}" width="${cols}" />
-  <GlueFunction />
+  <GlueFunction>${Object.entries(glueFunction).map(([label, strength]) => `
+    <Function><Labels L1="${escape(label)}" /><Strength>${strength}</Strength></Function>`).join('')}
+  </GlueFunction>
+  <RobotTypes>${robotTypes.map((t) => `
+    <RobotType id="${escape(t.id)}" label="${escape(t.label)}" color="${escape(t.color)}" />`).join('')}
+  </RobotTypes>
+  <StickingRules>${stickingRules.map(([a, b]) => `
+    <Sticking a="${escape(a)}" b="${escape(b)}" />`).join('')}
+  </StickingRules>
   <PreviewTiles />
   <TileData>
 ${tileXml}

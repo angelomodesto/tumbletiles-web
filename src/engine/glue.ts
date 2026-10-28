@@ -1,4 +1,4 @@
-import type { Board, GlueFunction, Polyomino, Tile } from './types'
+import type { Board, GlueFunction, Polyomino, Tile, StickingRule } from './types'
 import { occupancy } from './board'
 
 /** Index of each side within a tile's glue labels. */
@@ -23,7 +23,13 @@ export const DEFAULT_TEMPERATURE = 1
  * worth 1; the reference throws on an unknown label and swallows the error,
  * which silently drops the bond.
  */
-function bondStrength(a: Tile, b: Tile, glueFunction: GlueFunction): number {
+function bondStrength(a: Tile, b: Tile, glueFunction: GlueFunction, rules: StickingRule[]): number {
+  if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) return 0
+  if (!a.isConcrete && !b.isConcrete && (a.typeId !== undefined || b.typeId !== undefined)) {
+    return rules.some(([left, right]) =>
+      (left === a.typeId && right === b.typeId) || (right === a.typeId && left === b.typeId),
+    ) ? 1 : 0
+  }
   if (a.isConcrete || b.isConcrete) return 0
 
   let mine = ''
@@ -46,7 +52,7 @@ function bondStrength(a: Tile, b: Tile, glueFunction: GlueFunction): number {
   }
 
   if (mine === '' || mine !== theirs) return 0
-  return glueFunction[mine] ?? 1
+  return Object.hasOwn(glueFunction, mine) ? glueFunction[mine] : 1
 }
 
 /**
@@ -59,13 +65,14 @@ export function canJoin(
   b: Polyomino,
   glueFunction: GlueFunction = DEFAULT_GLUE_FUNCTION,
   temperature: number = DEFAULT_TEMPERATURE,
+  rules: StickingRule[] = [],
 ): boolean {
   if (a.id === b.id) return false
 
   let strength = 0
   for (const tile of a.tiles) {
     for (const other of b.tiles) {
-      strength += bondStrength(tile, other, glueFunction)
+      strength += bondStrength(tile, other, glueFunction, rules)
     }
   }
 
@@ -114,7 +121,7 @@ export function activateGlues(
           const other = board.polyominoes.find((p) => p.id === neighbor.polyId)
           if (other === undefined) continue
 
-          if (canJoin(poly, other, glueFunction, temperature)) {
+          if (canJoin(poly, other, glueFunction, temperature, board.stickingRules ?? [])) {
             join(board, poly, other)
             changed = true
             break

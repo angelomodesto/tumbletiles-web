@@ -81,3 +81,69 @@ component tests later will mean introducing a `jsdom` environment.
 - **Oxlint**, not ESLint, is the linter - config lives in `.oxlintrc.json`.
 - TypeScript uses project references (`tsconfig.app.json` for `src/`,
   `tsconfig.node.json` for `vite.config.ts`).
+
+## Simulator editing
+
+- **Robot types:** pick a placement type, expand **Add a type** to give it a
+  label and color, then expand **Edit type & sticking** to choose its partners.
+  Rules are symmetric; self-sticking is a separate checkbox. Unchecked pairs
+  never stick. New types start with no sticking rules. Orthogonal contact bonds;
+  diagonal contact does not. Walls never bond.
+- **Bonds:** placed robots bond on contact according to their type rules. A
+  movement command retains the existing rigid assemblies and activates new
+  bonds once movement stops (the original end-of-tumble behavior). Editing
+  rules, deleting tiles, or applying a type recomputes assemblies. Changing a
+  label or color preserves bonds. Imported untyped tiles retain directional
+  glue behavior; typed and untyped tiles do not bond to one another.
+- **Selection:** use **Select (V)** and drag a rectangle, or click one occupied
+  cell. Shift adds to the selection. **Apply type** changes selected robots to
+  the placement type; walls remain walls. **Delete selected** or Delete removes
+  the selected pieces. Escape clears the selection. Selected pieces remain
+  selected when moved because selection tracks tile identity, not coordinates.
+- **View:** use +/− for 50–400% zoom relative to the fitted cell size. **Pan (H)**
+  or middle-button dragging scrolls the enlarged board. **Fit board** resets the
+  view. Large boards retain the existing minimum cell size and scroll.
+- **Configurations:** browse the thumbnail gallery, or import/export XML.
+  Previews come from the actual bundled XML, not separate image files.
+- **Resize:** enter dimensions and choose **Resize board**. Coordinates, types,
+  glues, and bonded groups are retained. A shrink that would hide or discard
+  pieces is rejected with a message; delete those pieces first.
+- **Undo:** the last 30 simulation/edit operations can be undone, including
+  clearing, resizing and loading a configuration. State is retained when moving
+  between the simulator and tutorial within the page; reloads require an export.
+
+The landing page, demonstration frames, tutorial, and shared visual tokens are
+unchanged. New colors are confined to user-defined robot types.
+
+### XML compatibility
+
+Legacy board size, tile positions, directional glue labels and strengths are
+read and written using the existing desktop format. Export also preserves tile
+labels and colors. XML text and attribute values are escaped.
+
+`RobotTypes`, `StickingRules`, per-tile `TypeId`, and `Assembly` are web-specific
+extensions. They retain custom rule matrices and rigid groups when reopened in
+this simulator. **Do not assume custom type behavior survives loading in the
+original desktop application**, which may ignore or reject these extensions.
+The ordinary directional-glue fields remain intact for legacy configurations.
+This change does not claim independent desktop-model equivalence.
+
+### Regression checks
+
+Run the normal checks and the Python suite (Python 3.10+; standard library only):
+
+```sh
+npm ci
+npm test
+npm run test:python
+npm run lint
+npm run build
+```
+
+The Python tests run the actual TypeScript state transitions through a temporary
+Node driver and compare every command with an independently implemented Python
+movement/connectivity model: 100 seeded boards and 1,200 commands. They also
+parse generated XML independently and check every preset's dimensions, counts,
+and file size against the gallery index. `NODE` can select a Node executable.
+These tests detect regressions; they do not prove the simulator is bug-free or
+validate the original research experiments.

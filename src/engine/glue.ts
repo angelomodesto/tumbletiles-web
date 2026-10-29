@@ -25,7 +25,11 @@ export const DEFAULT_TEMPERATURE = 1
  */
 function bondStrength(a: Tile, b: Tile, glueFunction: GlueFunction, rules: StickingRule[]): number {
   if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) return 0
-  if (!a.isConcrete && !b.isConcrete && (a.typeId !== undefined || b.typeId !== undefined)) {
+  // Types override glues only where both tiles carry one, which is the rule the
+  // user set. A typed tile beside an untyped one - a hand-placed robot against an
+  // imported construction - still bonds on its glue labels, so loading a
+  // configuration never changes what that configuration means.
+  if (!a.isConcrete && !b.isConcrete && a.typeId !== undefined && b.typeId !== undefined) {
     return rules.some(([left, right]) =>
       (left === a.typeId && right === b.typeId) || (right === a.typeId && left === b.typeId),
     ) ? 1 : 0

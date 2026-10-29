@@ -112,3 +112,29 @@ describe('metadata-only edits', () => {
     expect(() => parseConfiguration(xml, parser)).toThrow(/unknown type/)
   })
 })
+
+describe('types alongside imported glue data', () => {
+  it('keeps glue labels when a type is applied, in state and on export', () => {
+    let state = typed()
+    state.glueFunction = { A: 1 }
+    addTile(state.board, 1, 1, ['', 'A', '', ''])
+    addTile(state.board, 2, 1, ['', '', '', 'A'])
+    activateGlues(state.board, state.glueFunction)
+    expect(state.board.polyominoes).toHaveLength(1)
+    state = assignType(state, allTiles(state.board).map((t) => t.id), 'blue')
+    // Blue does not stick to blue under these rules, so the pair separates - but
+    // the labels the file supplied are still there, and undoing restores the bond.
+    expect(state.board.polyominoes).toHaveLength(2)
+    expect(allTiles(state.board).map((t) => t.glues)).toEqual([['', 'A', '', ''], ['', '', '', 'A']])
+    const restored = loadState(parseConfiguration(exportState(state), parser))
+    expect(allTiles(restored.board).map((t) => t.glues)).toEqual([['', 'A', '', ''], ['', '', '', 'A']])
+  })
+  it('bonds a typed robot to an untyped neighbour on their glues', () => {
+    let state = typed()
+    state.glueFunction = { A: 1 }
+    addTile(state.board, 1, 1, ['', 'A', '', ''])
+    addTile(state.board, 2, 1, ['', '', '', 'A'])
+    state = assignType(state, [allTiles(state.board)[0].id], 'blue')
+    expect(state.board.polyominoes).toHaveLength(1)
+  })
+})

@@ -31,7 +31,11 @@ export function moveState(state: SimulatorState, direction: Direction): Simulato
   return next
 }
 
-/** Editing changes the construction: recompute connected assemblies from its current contacts. */
+/**
+ * Editing changes the construction: recompute connected assemblies from its
+ * current contacts. Glue labels are left alone, so giving a tile a type never
+ * discards what its configuration file said about it.
+ */
 function reassemble(state: SimulatorState): void {
   state.board.polyominoes = state.board.polyominoes.flatMap((p) => p.tiles).map((tile) => {
     const id = state.board.nextPolyId++
@@ -65,7 +69,7 @@ export function assignType(state: SimulatorState, ids: number[], typeId: string)
   const next = structuredClone(state)
   const selected = new Set(ids)
   for (const tile of allTiles(next.board)) {
-    if (!tile.isConcrete && selected.has(tile.id)) { tile.typeId = typeId; tile.glues = ['', '', '', ''] }
+    if (!tile.isConcrete && selected.has(tile.id)) tile.typeId = typeId
   }
   reassemble(next)
   return next

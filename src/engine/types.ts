@@ -25,6 +25,15 @@ export type Glues = [string, string, string, string]
 /** Maps a glue label to its strength. Tiles join when the total reaches the temperature. */
 export type GlueFunction = Record<string, number>
 
+export interface RobotType {
+  id: string
+  label: string
+  color: string
+}
+
+/** Unordered type pairs; omitted pairs never stick. */
+export type StickingRule = [string, string]
+
 /** A single square. Concrete tiles are fixed walls and never move or bond. */
 export interface Tile {
   readonly id: number
@@ -34,6 +43,9 @@ export interface Tile {
   polyId: number
   glues: Glues
   isConcrete: boolean
+  typeId?: string
+  color?: string
+  label?: string
 }
 
 /** A group of tiles that moves as one unit. */
@@ -53,4 +65,6 @@ export interface Board {
   concrete: Tile[]
   nextTileId: number
   nextPolyId: number
+  robotTypes?: RobotType[]
+  stickingRules?: StickingRule[]
 }

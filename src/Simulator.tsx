@@ -228,7 +228,6 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
           <button onClick={fit}>Fit board</button>
           <button disabled={!history.length} onClick={undo}>Undo</button>
         </div>
-        {error && <p className="board-error" role="alert">{error}</p>}
         <div ref={panel} className={`board-panel editor-board-panel ${tool === 'pan' ? 'pan-tool' : ''}`}>
           <div ref={grid} className="board-grid editor-grid" aria-label="Simulation board" role="group"
             onPointerDown={pointerDown} onPointerMove={pointerMove}
@@ -253,6 +252,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
           </div>
           <p className="board-message board-message-empty">{!tiles.length ? 'Empty board. Pick a tool and click a square, or load a configuration.' : ''}</p>
         </div>
+        {error && <p className="board-error" role="alert">{error}</p>}
         <div className="status-bar" aria-live="polite">
           <span><b>Tool</b> {tool}</span><span><b>Board</b> {state.board.cols} × {state.board.rows}</span>
           <span><b>Robots</b> {tiles.length - state.board.concrete.length}</span><span><b>Walls</b> {state.board.concrete.length}</span>

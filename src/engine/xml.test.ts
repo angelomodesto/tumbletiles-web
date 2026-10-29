@@ -140,3 +140,19 @@ describe('the vendored research configurations', () => {
     expect(robotCells(b)).toHaveLength(before)
   })
 })
+
+describe('desktop-compatible blank labels', () => {
+  it('writes zero for absent and empty labels and keeps nonempty labels escaped', () => {
+    for (const label of [undefined, '']) {
+      const xml = serializeConfiguration(2, 2, [{ cell: 0, isConcrete: false, label }])
+      expect(xml).toContain('<Label>0</Label>')
+      expect(parseConfiguration(xml, parser).tiles[0].label).toBe('0')
+    }
+    const imported = parseConfiguration(SMALL, parser)
+    expect(imported.tiles[0].label).toBe('')
+    const xml = serializeConfiguration(5, 5, imported.tiles.map((t) => ({ ...t, cell: t.y * 5 + t.x })))
+    expect(xml.match(/<Label>0<\/Label>/g)).toHaveLength(3)
+    const named = serializeConfiguration(2, 2, [{ cell: 0, isConcrete: false, label: 'A & <B>' }])
+    expect(parseConfiguration(named, parser).tiles[0].label).toBe('A & <B>')
+  })
+})

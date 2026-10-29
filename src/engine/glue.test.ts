@@ -124,3 +124,28 @@ describe('joining keeps going until nothing else joins', () => {
     }
   })
 })
+
+describe('mixed legacy and typed contacts', () => {
+  it('uses matching glues for mixed pairs in either order, but rules replace glues for two typed tiles', () => {
+    for (const typedSide of ['left', 'right', 'both', 'neither']) {
+      const board = createBoard(5, 5)
+      const left = addTile(board, 1, 1, ['', 'A', '', ''])!
+      const right = addTile(board, 2, 1, ['', '', '', 'A'])!
+      if (typedSide === 'left' || typedSide === 'both') left.typeId = 'blue'
+      if (typedSide === 'right' || typedSide === 'both') right.typeId = 'red'
+      board.stickingRules = []
+      activateGlues(board)
+      expect(board.polyominoes).toHaveLength(typedSide === 'both' ? 2 : 1)
+    }
+  })
+  it('does not sum type strength with retained glues', () => {
+    const board = createBoard(5, 5)
+    addTile(board, 1, 1, ['', 'strong', '', ''])!.typeId = 'blue'
+    addTile(board, 2, 1, ['', '', '', 'strong'])!.typeId = 'red'
+    board.stickingRules = [['blue', 'red']]
+    activateGlues(board, { strong: 5 }, 2)
+    expect(board.polyominoes).toHaveLength(2)
+    activateGlues(board, { strong: 5 }, 1)
+    expect(board.polyominoes).toHaveLength(1)
+  })
+})

@@ -93,8 +93,13 @@ component tests later will mean introducing a `jsdom` environment.
   movement command retains the existing rigid assemblies and activates new
   bonds once movement stops (the original end-of-tumble behavior). Editing
   rules, deleting tiles, or applying a type recomputes assemblies. Changing a
-  label or color preserves bonds. Imported untyped tiles retain directional
-  glue behavior; typed and untyped tiles do not bond to one another.
+  label or color preserves bonds. Appearance edits commit on blur (or Enter),
+  so typing or dragging a color picker consumes one undo entry per field edit.
+  No-op edits do not consume undo history. When both touching tiles have types, type rules replace directional glue.
+  If either tile is untyped, matching facing glues determine the bond. These
+  strengths are not summed. Assigning a type retains every imported glue label;
+  **Use glues** clears the type on selected robots to restore their original
+  glue behavior, including after export/reimport. Walls are unaffected.
 - **Selection:** use **Select (V)** and drag a rectangle, or click one occupied
   cell. Shift adds to the selection. **Apply type** changes selected robots to
   the placement type; walls remain walls. **Delete selected** or Delete removes
@@ -112,8 +117,9 @@ component tests later will mean introducing a `jsdom` environment.
   clearing, resizing and loading a configuration. State is retained when moving
   between the simulator and tutorial within the page; reloads require an export.
 
-The landing page, demonstration frames, tutorial, and shared visual tokens are
-unchanged. New colors are confined to user-defined robot types.
+The landing page, demonstration frames and tutorial keep their existing design.
+Robot colors come from imported configurations or user-defined types; interface
+chrome follows the shared visual tokens.
 
 ### XML compatibility
 
@@ -142,7 +148,8 @@ npm run build
 
 The Python tests run the actual TypeScript state transitions through a temporary
 Node driver and compare every command with an independently implemented Python
-movement/connectivity model: 100 seeded boards and 1,200 commands. They also
+movement/connectivity model: 100 seeded boards mixing typed and untyped robots,
+directional glues and type rules, with 1,200 commands. They also
 parse generated XML independently and check every preset's dimensions, counts,
 and file size against the gallery index. `NODE` can select a Node executable.
 These tests detect regressions; they do not prove the simulator is bug-free or

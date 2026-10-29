@@ -23,7 +23,8 @@ def normalized(groups):
 def oracle(config, commands):
     """Find the greatest simultaneously movable set by pruning blocked groups.
 
-    Bonds are graph connected components of adjacent permitted type pairs.
+    Bonds are graph connected components of adjacent permitted contacts.
+    Two typed tiles use the type matrix; other pairs use facing glue labels.
     The oracle does not import or translate TypeScript source.
     """
     groups = [[copy.deepcopy(t)] for t in config['tiles'] if not t['isConcrete']]
@@ -37,11 +38,20 @@ def oracle(config, commands):
             while parent[i] != i:
                 i = parent[i]
             return i
+        def compatible(a, b):
+            dx, dy = b['x'] - a['x'], b['y'] - a['y']
+            faces = {(0, -1): (0, 2), (1, 0): (1, 3), (0, 1): (2, 0), (-1, 0): (3, 1)}
+            if (dx, dy) not in faces:
+                return False
+            if a.get('typeId') is not None and b.get('typeId') is not None:
+                return frozenset((a['typeId'], b['typeId'])) in rules
+            face_a, face_b = faces[(dx, dy)]
+            label_a, label_b = a['glues'][face_a], b['glues'][face_b]
+            return bool(label_a) and label_a == label_b and config['glueFunction'].get(label_a, 1) >= 1
+
         for i, left in enumerate(groups):
             for j in range(i):
-                if any(abs(a['x'] - b['x']) + abs(a['y'] - b['y']) == 1
-                       and frozenset((a['typeId'], b['typeId'])) in rules
-                       for a in left for b in groups[j]):
+                if any(compatible(a, b) for a in left for b in groups[j]):
                     parent[find(i)] = find(j)
         components = {}
         for i, group in enumerate(groups):
@@ -85,10 +95,17 @@ def scenarios():
     for _ in range(100):
         cols, rows = rng.randint(3, 12), rng.randint(3, 12)
         cells = rng.sample([(x, y) for x in range(cols) for y in range(rows)], rng.randint(2, cols * rows // 2))
-        tiles = [{'x': x, 'y': y, 'isConcrete': rng.random() < .25,
-                  'typeId': rng.choice(['a', 'b', 'c']), 'glues': ['', '', '', '']} for x, y in cells]
+        tiles = []
+        for x, y in cells:
+            wall = rng.random() < .25
+            tile = {'x': x, 'y': y, 'isConcrete': wall,
+                    'glues': ['', '', '', ''] if wall else [rng.choice(['', 'A', 'zero', 'strong&glue']) for _ in range(4)]}
+            type_id = rng.choice(['a', 'b', 'c', None])
+            if not wall and type_id is not None:
+                tile['typeId'] = type_id
+            tiles.append(tile)
         rules = [[a, b] for i, a in enumerate('abc') for b in 'abc'[i:] if rng.random() < .4]
-        result.append({'config': {'cols': cols, 'rows': rows, 'tiles': tiles, 'glueFunction': {'zero': 0, 'strong&glue': 3},
+        result.append({'config': {'cols': cols, 'rows': rows, 'tiles': tiles, 'glueFunction': {'zero': 0, 'strong&glue': 3, 'A': 1},
                                  'robotTypes': [{'id': t, 'label': t + ' & <robot>', 'color': '#224466'} for t in 'abc'],
                                  'stickingRules': rules}, 'commands': [rng.choice(list(DELTAS)) for _ in range(12)]})
     return result
@@ -118,6 +135,9 @@ class EngineReferenceTests(unittest.TestCase):
             self.assertEqual(rules, scenario['config']['stickingRules'])
             self.assertEqual([t.attrib['label'] for t in doc.findall('./RobotTypes/RobotType')],
                              [t['label'] for t in scenario['config']['robotTypes']])
+            self.assertEqual(sorted(tuple(t.findtext(tag) for tag in ['NorthGlue', 'EastGlue', 'SouthGlue', 'WestGlue'])
+                                    for t in doc.findall('./TileData/Tile') if t.findtext('Concrete') != 'True'),
+                             sorted(tuple(label or '0' for label in t['glues']) for t in scenario['config']['tiles'] if not t['isConcrete']))
             locations = [(t.find('Location').attrib['x'], t.find('Location').attrib['y']) for t in doc.findall('./TileData/Tile')]
             self.assertEqual(len(locations), len(set(locations)))
             self.assertEqual(len(locations), len(scenario['config']['tiles']))

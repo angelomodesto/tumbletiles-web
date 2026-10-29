@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, Dispatch, PointerEvent, SetStateAction } from 'react'
 import type { Direction } from './engine'
 import type { RobotType } from './engine/types'
-import { parseConfiguration } from './engine/xml'
+import { MAX_BOARD_SIZE, parseConfiguration } from './engine/xml'
 import type { Configuration } from './engine/xml'
 import { cellSizeFor } from './boardLayout'
-import { allTiles, assignType, exportState, initialState, loadState, moveState, place, removeTiles, resize, selectRegion, setTypes } from './simulatorState'
+import { allTiles, assignType, exportState, initialState, loadState, moveState, place, recordHistory, removeTiles, resize, selectRegion, setTypes } from './simulatorState'
 import type { SimulatorState } from './simulatorState'
 import PresetGallery from './PresetGallery'
+import TypeAppearanceEditor from './TypeAppearanceEditor'
 import './Simulator.css'
 
 type Tool = 'robot' | 'wall' | 'erase' | 'select' | 'pan'
@@ -45,7 +46,8 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   function edit(action: (current: SimulatorState) => SimulatorState) {
     try {
       const next = action(state)
-      setHistory((items) => [...items.slice(-29), state])
+      if (next === state) { setError(''); return }
+      setHistory((items) => recordHistory(items, state, next))
       setState(next)
       setError('')
     } catch (e) { setError(e instanceof Error ? e.message : 'Could not update the board.') }
@@ -155,6 +157,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
             <p className="control-hint">Drag a rectangle. Shift adds to selection. {selection.length} selected.</p>
             <div className="control-row"><button disabled={!selection.length} onClick={() => { edit((s) => removeTiles(s, selection)); setSelection([]) }}>Delete selected</button>
               <button disabled={!selection.length || !activeType} onClick={() => edit((s) => assignType(s, selection, activeType!.id))}>Apply type</button>
+              <button disabled={!selection.length} onClick={() => edit((s) => assignType(s, selection))}>Use glues</button>
               <button disabled={!selection.length} onClick={() => setSelection([])}>Deselect</button></div>
           </>}
           {tool === 'pan' && <p className="control-hint">Drag the board to pan. Zoom in for more room.</p>}
@@ -165,9 +168,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
             {types.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
           </select></label>
           {activeType && <details className="type-editor"><summary>Edit type & sticking</summary>
-            <label className="field-label">Label<input aria-label="Type label" value={activeType.label} maxLength={60}
-              onChange={(e) => { if (e.target.value.trim()) updateType({ ...activeType, label: e.target.value }) }} /></label>
-            <label className="field-label">Color<input aria-label="Type color" type="color" value={activeType.color} onChange={(e) => updateType({ ...activeType, color: e.target.value })} /></label>
+            <TypeAppearanceEditor key={`${activeType.id}:${activeType.label}:${activeType.color}`} type={activeType} onCommit={updateType} />
             <p className="control-hint">Sticks to (both directions):</p>
             {types.map((type) => <label className="rule-option" key={type.id}><input type="checkbox"
               checked={(state.board.stickingRules ?? []).some(([a, b]) => (a === activeType.id && b === type.id) || (b === activeType.id && a === type.id))}
@@ -176,7 +177,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
                 if (e.target.checked) rules.push([activeType.id, type.id])
                 edit((s) => setTypes(s, types, rules))
               }} />{type.label}{type.id === activeType.id ? ' (itself)' : ''}</label>)}
-            <p className="control-hint">Unchecked types do not stick. Changing rules or assigning a type rebuilds bonds.</p>
+            <p className="control-hint">When both robots have types, these rules replace side glues. Otherwise matching side glues apply. Assigning a type keeps glue labels; Use glues restores them. Changing rules or types rebuilds bonds.</p>
           </details>}
           <details><summary>Add a type</summary><form className="type-form" onSubmit={(e) => {
             e.preventDefault()
@@ -211,14 +212,15 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
         <section className="control-panel">
           <h2>Board</h2>
           <form className="control-row" onSubmit={(e) => { e.preventDefault(); edit((s) => resize(s, Number(width), Number(height))) }}>
-            <label>Width<input aria-label="Width" type="number" min="1" max="100" required value={width} onChange={(e) => setWidth(e.target.value)} /></label>
-            <label>Height<input aria-label="Height" type="number" min="1" max="100" required value={height} onChange={(e) => setHeight(e.target.value)} /></label>
+            <label>Width<input aria-label="Width" type="number" min="1" max={MAX_BOARD_SIZE} required value={width} onChange={(e) => setWidth(e.target.value)} /></label>
+            <label>Height<input aria-label="Height" type="number" min="1" max={MAX_BOARD_SIZE} required value={height} onChange={(e) => setHeight(e.target.value)} /></label>
             <button type="submit">Resize board</button>
-          </form><p className="control-hint">Up to 100 × 100. Shrinking keeps all tiles safe.</p>
+          </form><p className="control-hint">Up to {MAX_BOARD_SIZE} × {MAX_BOARD_SIZE}. Shrinking keeps all tiles safe.</p>
         </section>
         <div className="control-danger"><button onClick={() => { edit((s) => ({ ...initialState(), board: { ...s.board, polyominoes: [], concrete: [] } })); setSelection([]) }}>Clear board</button></div>
       </aside>
       <main className="simulator-stage">
+        <p className="narrow-note">This screen is narrow for a board. The board scrolls inside its panel; a wider screen is easier. The tutorial reads well at this size.</p>
         <div className="view-controls control-row" aria-label="Board view">
           <button aria-label="Zoom out" disabled={zoom <= 0.5} onClick={() => changeZoom(zoom / 1.25)}>−</button>
           <span aria-live="polite">{Math.round(zoom * 100)}%</span>
@@ -241,7 +243,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
                 aria-pressed={tile ? selected.has(tile.id) : false}
                 title={label === 'empty' ? undefined : label}
                 className={`board-cell ${tile ? tile.isConcrete ? 'wall' : 'robot' : ''} ${tile && selected.has(tile.id) ? 'selected-cell' : ''}`}
-                style={tile && !tile.isConcrete ? { backgroundColor: type?.color ?? 'var(--color-robot)' } : undefined}
+                style={tile && !tile.isConcrete ? { backgroundColor: type?.color ?? tile.color ?? 'var(--color-robot)' } : undefined}
                 onClick={() => { if (tool !== 'select') clickCell(x, y) }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); clickCell(x, y, e.shiftKey) }

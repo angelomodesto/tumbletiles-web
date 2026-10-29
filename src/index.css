@@ -33,6 +33,8 @@
   /* Board pieces */
   --color-robot: #111318;
   --color-wall: #9aa0a8;
+  --color-selection-fill: color-mix(in srgb, var(--color-wall) 20%, transparent);
+  --color-dialog-scrim: color-mix(in srgb, var(--color-text) 40%, transparent);
 
   /* --- Spacing, 4px based ------------------------------------------------ */
   --space-4: 4px;

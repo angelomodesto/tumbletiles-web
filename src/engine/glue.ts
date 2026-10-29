@@ -18,14 +18,16 @@ export const DEFAULT_GLUE_FUNCTION: GlueFunction = {
 export const DEFAULT_TEMPERATURE = 1
 
 /**
- * Strength of the bond between two touching tiles, or 0 when they do not touch
- * or their facing labels differ. A label the glue function does not list is
+ * When both tiles have types, their type rule replaces directional glue.
+ * Mixed and untyped pairs use matching facing glue labels, retaining legacy
+ * behavior on imported constructions. Type rules and glue strengths are not summed.
+ * Non-touching tiles and walls never bond. A label the glue function does not list is
  * worth 1; the reference throws on an unknown label and swallows the error,
  * which silently drops the bond.
  */
 function bondStrength(a: Tile, b: Tile, glueFunction: GlueFunction, rules: StickingRule[]): number {
   if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) return 0
-  if (!a.isConcrete && !b.isConcrete && (a.typeId !== undefined || b.typeId !== undefined)) {
+  if (!a.isConcrete && !b.isConcrete && (a.typeId !== undefined && b.typeId !== undefined)) {
     return rules.some(([left, right]) =>
       (left === a.typeId && right === b.typeId) || (right === a.typeId && left === b.typeId),
     ) ? 1 : 0

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import type { XmlParser } from './engine/xml'
-import { parseConfiguration } from './engine/xml'
+import { MAX_BOARD_SIZE, parseConfiguration } from './engine/xml'
 import { addConcrete, addTile, activateGlues } from './engine'
-import { allTiles, assignType, exportState, initialState, loadState, moveState, place, removeTiles, resize, selectRegion, setTypes } from './simulatorState'
+import { allTiles, assignType, exportState, initialState, loadState, moveState, place, recordHistory, removeTiles, resize, selectRegion, setTypes } from './simulatorState'
 const parser = new DOMParser() as unknown as XmlParser
 const types = [
   { id: 'blue', label: 'Blue & <one> "robot"', color: '#0066ff' },
@@ -110,5 +110,49 @@ describe('metadata-only edits', () => {
   it('rejects unknown type references without silently dropping behavior', () => {
     const xml = exportState(place(typed(), 0, 0, 'robot', 'blue')).replace('<TypeId>blue</TypeId>', '<TypeId>missing</TypeId>')
     expect(() => parseConfiguration(xml, parser)).toThrow(/unknown type/)
+  })
+})
+
+describe('review regressions: retain imported glues', () => {
+  it('keeps Cat glue labels through type assignment and export, then restores glue behavior', async () => {
+    const { default: cat } = await import('../public/presets/Cat.xml?raw')
+    const original = loadState(parseConfiguration(cat, parser))
+    const ids = allTiles(original.board).map((t) => t.id)
+    const glues = (s: typeof original) => allTiles(s.board).map((t) => [t.x, t.y, t.glues]).sort()
+    const typed = assignType(original, ids, 'default')
+    expect(glues(typed)).toEqual(glues(original))
+    const saved = loadState(parseConfiguration(exportState(typed), parser))
+    expect(glues(saved)).toEqual(glues(original))
+    const restored = assignType(saved, allTiles(saved.board).map((t) => t.id))
+    expect(restored.board.polyominoes.map((p) => p.tiles.length).sort()).toEqual(original.board.polyominoes.map((p) => p.tiles.length).sort())
+    const positions = (s: typeof original) => allTiles(s.board).map((t) => [t.x, t.y]).sort()
+    expect(positions(moveState(restored, 'S'))).toEqual(positions(moveState(original, 'S')))
+    expect(allTiles(original.board).every((t) => t.typeId === undefined)).toBe(true)
+  })
+})
+
+describe('review regressions: meaningful undo entries', () => {
+  it('returns the same state for occupied cells, empty erases, unchanged sizes and metadata', () => {
+    const state = place(initialState(), 1, 1, 'robot', 'default')
+    expect(place(state, 1, 1, 'robot', 'default')).toBe(state)
+    expect(place(state, 1, 1, 'wall', 'default')).toBe(state)
+    expect(place(state, 0, 0, 'erase', 'default')).toBe(state)
+    expect(removeTiles(state, [999])).toBe(state)
+    expect(assignType(state, [0], 'default')).toBe(state)
+    expect(assignType(state, [], 'default')).toBe(state)
+    expect(resize(state, state.board.cols, state.board.rows)).toBe(state)
+    expect(setTypes(state, state.board.robotTypes!, state.board.stickingRules!)).toBe(state)
+  })
+  it('keeps the real action available after more than 30 no-op clicks', () => {
+    const before = initialState()
+    const placed = place(before, 0, 0, 'robot', 'default')
+    let history = recordHistory([], before, placed)
+    for (let i = 0; i < 40; i++) history = recordHistory(history, placed, place(placed, 0, 0, 'wall', 'default'))
+    expect(history).toEqual([before])
+    expect(recordHistory(history, placed, placed)).toBe(history)
+  })
+  it('uses the shared import cap for resizing, including the boundary', () => {
+    expect(resize(initialState(), MAX_BOARD_SIZE, MAX_BOARD_SIZE).board.cols).toBe(MAX_BOARD_SIZE)
+    expect(() => resize(initialState(), MAX_BOARD_SIZE + 1, 1)).toThrow(/dimensions/)
   })
 })

@@ -226,7 +226,7 @@ export function serializeConfiguration(
       <EastGlue>${label(glues[1])}</EastGlue>
       <WestGlue>${label(glues[3])}</WestGlue>
       <Concrete>${tile.isConcrete ? 'True' : 'False'}</Concrete>
-      <Label>${escape(tile.label ?? '0')}</Label>${tile.typeId ? `
+      <Label>${label(tile.label ?? '')}</Label>${tile.typeId ? `
       <TypeId>${escape(tile.typeId)}</TypeId>` : ''}${tile.assembly !== undefined ? `
       <Assembly>${tile.assembly}</Assembly>` : ''}
     </Tile>`

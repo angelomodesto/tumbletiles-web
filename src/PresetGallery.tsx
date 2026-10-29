@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { parseConfiguration } from './engine/xml'
 import type { Configuration } from './engine/xml'
+import BoardPreview from './BoardPreview'
 import { loadPresetIndex } from './presets'
 import type { Preset } from './presets'
 
@@ -31,11 +32,7 @@ export default function PresetGallery({ onLoad }: { onLoad: (config: Configurati
     {!entries.length && !error && <p role="status">Loading configurations…</p>}
     {entries.map(({ preset, config, error }) => <button type="button" className="preset-card" key={preset.id}
       disabled={!config} onClick={() => config && onLoad(config)} aria-label={`Load ${preset.name}`}>
-      {config ? <svg viewBox={`0 0 ${config.cols} ${config.rows}`} role="img" aria-label={`${preset.name} board preview`}>
-        <rect width={config.cols} height={config.rows} fill="white" />
-        {config.tiles.map((tile, i) => <rect key={i} x={tile.x} y={tile.y} width="1" height="1"
-          fill={tile.isConcrete ? '#9aa0a8' : '#111318'} />)}
-      </svg> : <span className="preview-placeholder">{error ?? 'Loading preview…'}</span>}
+      {config ? <BoardPreview config={config} name={preset.name} /> : <span className="preview-placeholder">{error ?? 'Loading preview…'}</span>}
       <strong>{preset.name}</strong>
       <span>{preset.cols} × {preset.rows} · {preset.robots} robots</span>
       <span className="control-hint">{preset.description}</span>

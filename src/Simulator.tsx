@@ -80,7 +80,11 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     setSelectedCells([]) // Clears highlighted board squares
     setError('') // Clears error messages
   }
-  function move(direction: Direction) { edit((current) => moveState(current, direction)) }
+  function move(direction: Direction) {
+    edit((current) => moveState(current, direction)) // Moves the robots
+    setSelectedCells([]) // Clears the old blue highlighted squares
+    setSelection([]) // Clears the selected robot IDs
+}
 
   
   function fillSelectedCells(selectedTool: 'robot' | 'wall') {

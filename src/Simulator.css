@@ -15,7 +15,12 @@
 .editor-grid { position: relative; flex: 0 0 auto; touch-action: none; user-select: none; margin: auto; }
 .editor-grid .board-cell { padding: 0; }
 .editor-grid .board-cell:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -3px; }
-.editor-grid .selected-cell { box-shadow: inset 0 0 0 2px var(--color-surface), inset 0 0 0 4px var(--color-border); }
+/* Highlights selected squares, including empty ones */
+.editor-grid .selected-cell {
+  outline: none; /* Removes the default outline */
+  box-shadow: inset 0 0 0 2px #3578d4; /* Blue border inside each selected square */
+  background-color: rgba(53, 120, 212, 0.25); /* Light blue fill */
+}
 .selection-region { position: absolute; pointer-events: none; border: 2px dashed var(--color-text); background: var(--color-selection-fill); box-sizing: border-box; }
 .pan-tool .board-cell { cursor: grab; }
 .pan-tool .board-cell:active { cursor: grabbing; }

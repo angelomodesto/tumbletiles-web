@@ -97,6 +97,31 @@ export function selectRegion(board: Board, start: { x: number; y: number }, end:
   return allTiles(board).filter((t) => t.x >= Math.min(start.x, end.x) && t.x <= Math.max(start.x, end.x)
     && t.y >= Math.min(start.y, end.y) && t.y <= Math.max(start.y, end.y)).map((t) => t.id)
 }
+
+
+// Returns every square inside the dragged rectangle, including empty squares.
+export function selectCells(
+  board: Board,
+  start: { x: number; y: number },
+  end: { x: number; y: number }
+): number[] {
+  const cells: number[] = [] // Stores the selected square positions
+
+  const minX = Math.max(0, Math.min(start.x, end.x)) // Left boundary
+  const maxX = Math.min(board.cols - 1, Math.max(start.x, end.x)) // Right boundary
+  const minY = Math.max(0, Math.min(start.y, end.y)) // Top boundary
+  const maxY = Math.min(board.rows - 1, Math.max(start.y, end.y)) // Bottom boundary
+
+  for (let y = minY; y <= maxY; y++) { // Goes through each row
+    for (let x = minX; x <= maxX; x++) { // Goes through each column
+      cells.push(y * board.cols + x) // Converts the square to its board index
+    }
+  }
+
+  return cells // Returns all selected squares
+}
+
+
 export function exportState(state: SimulatorState): string {
   const { board } = state
   return serializeConfiguration(board.cols, board.rows, allTiles(board).map((t) => {

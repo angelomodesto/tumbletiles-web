@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   addConcrete,
+  addConcretes,
   addTile,
+  addTiles,
   createBoard,
   fromIndex,
   inBounds,
@@ -77,5 +79,31 @@ describe('flat index conversion used by the interface', () => {
     for (let index = 0; index < cols * 4; index++) {
       expect(toIndex(fromIndex(index, cols), cols)).toBe(index)
     }
+  })
+})
+
+describe('batch placement', () => {
+  it('adds one robot per free square, each in its own polyomino', () => {
+    const board = createBoard(4, 4)
+    addConcrete(board, 1, 0)
+    const added = addTiles(board, [
+      { x: 0, y: 0 },
+      { x: 1, y: 0 }, // a wall is already here
+      { x: 0, y: 0 }, // listed twice
+      { x: 9, y: 9 }, // off the board
+      { x: 2, y: 0 },
+    ])
+    expect(added.map((t) => [t.x, t.y])).toEqual([[0, 0], [2, 0]])
+    expect(board.polyominoes).toHaveLength(2)
+    expect(new Set(added.map((t) => t.polyId)).size).toBe(2)
+    expect(tileAt(board, 1, 0)?.isConcrete).toBe(true)
+  })
+
+  it('adds walls the same way and returns nothing when every square is taken', () => {
+    const board = createBoard(3, 3)
+    addTile(board, 0, 0)
+    expect(addConcretes(board, [{ x: 0, y: 0 }, { x: 1, y: 1 }]).map((t) => [t.x, t.y])).toEqual([[1, 1]])
+    expect(addConcretes(board, [{ x: 0, y: 0 }, { x: 1, y: 1 }])).toEqual([])
+    expect(board.concrete).toHaveLength(1)
   })
 })

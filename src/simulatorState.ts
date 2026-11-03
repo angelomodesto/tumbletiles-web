@@ -1,4 +1,4 @@
-import { activateGlues, addConcrete, addTile, createBoard, tumble } from './engine'
+import { activateGlues, addConcrete, addConcretes, addTile, addTiles, createBoard, fromIndex, tumble } from './engine'
 import type { Board, Direction, GlueFunction, Tile } from './engine'
 import type { RobotType, StickingRule } from './engine/types'
 import { MAX_BOARD_SIZE, configurationToBoard, serializeConfiguration } from './engine/xml'
@@ -121,6 +121,24 @@ export function selectCells(
   return cells // Returns all selected squares
 }
 
+
+/**
+ * Fills the given board squares with robots of one type, or with walls, as a
+ * single edit: one copy of the board and one glue pass, however many squares.
+ * Occupied squares are skipped. Returns the same state when nothing is placed,
+ * so an empty fill never becomes an undo step.
+ */
+export function fillCells(state: SimulatorState, cells: number[], tool: 'robot' | 'wall', typeId: string): SimulatorState {
+  if (tool === 'robot' && !state.board.robotTypes?.some((t) => t.id === typeId)) return state
+  const positions = cells.map((index) => fromIndex(index, state.board.cols))
+  const next = structuredClone(state)
+  if (tool === 'wall') return addConcretes(next.board, positions).length ? next : state
+  const added = addTiles(next.board, positions)
+  if (!added.length) return state
+  for (const tile of added) tile.typeId = typeId
+  activateGlues(next.board, next.glueFunction)
+  return next
+}
 
 export function exportState(state: SimulatorState): string {
   const { board } = state

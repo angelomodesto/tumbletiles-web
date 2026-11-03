@@ -10,6 +10,7 @@ import {
   allTiles,
   assignType,
   exportState,
+  fillCells,
   initialState,
   loadState,
   moveState,
@@ -50,7 +51,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const grid = useRef<HTMLDivElement>(null)
   const dialog = useRef<HTMLDialogElement>(null)
   const libraryButton = useRef<HTMLButtonElement>(null)
-  const drag = useRef<null | { start: { x: number; y: number }; base: number[]; pan: boolean; clientX: number; clientY: number; left: number; top: number }>(null)
+  const drag = useRef<null | { start: { x: number; y: number }; base: number[]; baseCells: number[]; pan: boolean; clientX: number; clientY: number; left: number; top: number }>(null)
   const [region, setRegion] = useState<null | { x: number; y: number; width: number; height: number }>(null)
   const types = state.board.robotTypes ?? []
   const activeType = types.find((t) => t.id === typeId) ?? types[0]
@@ -58,6 +59,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const cells = new Map(tiles.map((tile) => [tile.y * state.board.cols + tile.x, tile]))
   const selected = new Set(selection)
   const highlightedCells = new Set(selectedCells) // NEW: Tracks highlighted board positions
+  const emptySelected = selectedCells.filter((index) => !cells.has(index)).length // Highlighted squares a fill would use
   const baseSize = cellSizeFor(state.board.cols, state.board.rows, panelSize.width - 34, panelSize.height - 90)
   const cellSize = Math.max(4, Math.round(baseSize * zoom))
 
@@ -82,31 +84,30 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   }
   function move(direction: Direction) {
     edit((current) => moveState(current, direction)) // Moves the robots
-    setSelectedCells([]) // Clears the old blue highlighted squares
-    setSelection([]) // Clears the selected robot IDs
-}
+    setSelectedCells([]) // Squares are positions, so they no longer match the robots that moved
+  }
 
-  
-  function fillSelectedCells(selectedTool: 'robot' | 'wall') {
-    if (selectedCells.length === 0) return // Stops if no squares are selected
-
-    edit((current) => {
-      let next = current // Starts with the current board
-
-      for (const index of selectedCells) { // Goes through each selected square
-        const x = index % current.board.cols // Gets the column
-        const y = Math.floor(index / current.board.cols) // Gets the row
-
-        next = place(next, x, y, selectedTool, activeType?.id ?? '') // Places a robot or wall
-      }
-
-      return next // Saves all placements as one undoable action
-    })
-
+  // Fills every highlighted empty square in one undoable step.
+  function fillSelectedCells(fillWith: 'robot' | 'wall') {
+    edit((current) => fillCells(current, selectedCells, fillWith, activeType?.id ?? ''))
     setSelectedCells([]) // Clears the highlighted squares afterward
     setSelection([]) // Clears the existing tile selection
   }
 
+  // Buttons and keyboard shortcuts both switch tools here, so leaving Select
+  // always clears the selection the same way.
+  function chooseTool(name: Tool) {
+    if (name !== 'select') {
+      setSelectedCells([]) // Removes the highlighted squares
+      setSelection([]) // Clears selected robots and walls
+    }
+    setTool(name)
+  }
+
+  function clearSelection() {
+    setSelection([]) // Clears selected robots and walls
+    setSelectedCells([]) // Clears highlighted squares
+  }
 
   function load(config: Configuration) {
     edit(() => loadState(config))
@@ -137,21 +138,15 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     if (!pan && tool !== 'select') return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    drag.current = { start: cellAt(event), base: event.shiftKey ? selection : [], pan,
+    // Shift keeps what was selected when the drag began; the rectangle is added to that.
+    drag.current = { start: cellAt(event), base: event.shiftKey ? selection : [], baseCells: event.shiftKey ? selectedCells : [], pan,
       clientX: event.clientX, clientY: event.clientY, left: panel.current!.scrollLeft, top: panel.current!.scrollTop }
-    
+
     if (!pan) {
       const start = drag.current.start // Gets the square where the mouse was pressed
-
-      const ids = selectRegion(state.board, start, start) // Selects existing robots and walls
-      setSelection(event.shiftKey ? [...new Set([...selection, ...ids])] : ids)
-
-      const squares = selectCells(state.board, start, start) // NEW: Selects the starting square
-      setSelectedCells(event.shiftKey
-        ? [...new Set([...selectedCells, ...squares])] // Shift adds to existing highlighted squares
-        : squares) // Otherwise starts a new selection
+      setSelection([...new Set([...drag.current.base, ...selectRegion(state.board, start, start)])])
+      setSelectedCells([...new Set([...drag.current.baseCells, ...selectCells(state.board, start, start)])])
     }
-
   }
   function pointerMove(event: PointerEvent<HTMLDivElement>) {
     const current = drag.current
@@ -159,31 +154,18 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     if (current.pan) {
       panel.current!.scrollLeft = current.left - event.clientX + current.clientX
       panel.current!.scrollTop = current.top - event.clientY + current.clientY
-    
-  } else {
-    const end = cellAt(event) // Gets the square currently under the mouse
-
-    setRegion({
-      x: Math.min(end.x, current.start.x), // Left edge
-      y: Math.min(end.y, current.start.y), // Top edge
-      width: Math.abs(end.x - current.start.x) + 1, // Rectangle width
-      height: Math.abs(end.y - current.start.y) + 1 // Rectangle height
-    })
-
-    // EXISTING: Selects robots and walls inside the rectangle
-    setSelection([
-      ...new Set([...current.base, ...selectRegion(state.board, current.start, end)])
-    ])
-
-    // NEW: Selects all board squares inside the rectangle
-    setSelectedCells((previous) => [
-      ...new Set([
-        ...(event.shiftKey ? previous : []),
-        ...selectCells(state.board, current.start, end)
-      ])
-    ])
-  }
-
+    } else {
+      const end = cellAt(event) // Gets the square currently under the mouse
+      setRegion({
+        x: Math.min(end.x, current.start.x), // Left edge
+        y: Math.min(end.y, current.start.y), // Top edge
+        width: Math.abs(end.x - current.start.x) + 1, // Rectangle width
+        height: Math.abs(end.y - current.start.y) + 1 // Rectangle height
+      })
+      // Both start again from the snapshot, so dragging back in shrinks the selection.
+      setSelection([...new Set([...current.base, ...selectRegion(state.board, current.start, end)])])
+      setSelectedCells([...new Set([...current.baseCells, ...selectCells(state.board, current.start, end)])])
+    }
   }
   function clickCell(x: number, y: number, shift = false) {
     if (tool === 'pan') return
@@ -209,11 +191,11 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       const target = event.target as HTMLElement
       if (library || event.ctrlKey || event.metaKey || event.altKey || target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
       if (keys[event.key]) { event.preventDefault(); move(keys[event.key]); return }
-      if (toolKeys[event.key.toLowerCase()]) { event.preventDefault(); setTool(toolKeys[event.key.toLowerCase()]); return }
+      if (toolKeys[event.key.toLowerCase()]) { event.preventDefault(); chooseTool(toolKeys[event.key.toLowerCase()]); return }
       if (event.key === '?') setShortcuts((value) => !value)
-      if (event.key === 'Escape') setSelection([])
+      if (event.key === 'Escape') clearSelection()
       if ((event.key === 'Delete' || event.key === 'Backspace') && selection.length) {
-        event.preventDefault(); edit((current) => removeTiles(current, selection)); setSelection([])
+        event.preventDefault(); edit((current) => removeTiles(current, selection)); clearSelection()
       }
     }
     window.addEventListener('keydown', handle)
@@ -233,39 +215,17 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
         <section className="control-panel">
           <h2>Tools</h2>
           <div className="control-row">{(['robot', 'wall', 'erase', 'select', 'pan'] as Tool[]).map((name) => <button type="button" key={name}
-            
-          aria-pressed={tool === name}
-          className={tool === name ? 'active-tool' : ''}
-          
-          onClick={() => {
-            if (selectedCells.length > 0 && (name === 'robot' || name === 'wall')) {
-              fillSelectedCells(name) // Fills selected squares before switching tools
-            }
-
-            if (name !== 'select') { // Checks if we're leaving the Select tool
-              setSelectedCells([]) // Removes the blue highlighted squares
-              setSelection([]) // Clears selected robots and walls
-            }
-
-            setTool(name) // Switches to the chosen tool
-          }}
-
-          >{name}</button>)}</div>
-
+            aria-pressed={tool === name} className={tool === name ? 'active-tool' : ''} onClick={() => chooseTool(name)}>{name}</button>)}</div>
           {tool === 'select' && <>
-            <p className="control-hint">Drag a rectangle. Shift adds to selection. {selection.length} selected.</p>
-            <div className="control-row"><button disabled={!selection.length} onClick={() => { edit((s) => removeTiles(s, selection)); setSelection([]) }}>Delete selected</button>
+            <p className="control-hint">Drag a rectangle. Shift adds to selection.</p>
+            {/* Counts get a short line of their own, so no number is long enough to wrap and move what is below. */}
+            <p className="control-hint">{selection.length} selected, {emptySelected} empty</p>
+            <div className="control-row"><button disabled={!selection.length} onClick={() => { edit((s) => removeTiles(s, selection)); clearSelection() }}>Delete selected</button>
               <button disabled={!selection.length || !activeType} onClick={() => edit((s) => assignType(s, selection, activeType!.id))}>Apply type</button>
               <button disabled={!selection.length} onClick={() => edit((s) => assignType(s, selection))}>Use glues</button>
-              <button
-                disabled={!selection.length && !selectedCells.length}
-                onClick={() => {
-                  setSelection([]) // Clears selected robots and walls
-                  setSelectedCells([]) // Clears highlighted squares
-                }}
-              >
-                Deselect
-              </button></div>
+              <button disabled={!emptySelected || !activeType} onClick={() => fillSelectedCells('robot')}>Fill with robots</button>
+              <button disabled={!emptySelected} onClick={() => fillSelectedCells('wall')}>Fill with walls</button>
+              <button disabled={!selection.length && !selectedCells.length} onClick={clearSelection}>Deselect</button></div>
           </>}
           {tool === 'pan' && <p className="control-hint">Drag the board to pan. Zoom in for more room.</p>}
         </section>

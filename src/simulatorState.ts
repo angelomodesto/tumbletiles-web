@@ -140,6 +140,59 @@ export function fillCells(state: SimulatorState, cells: number[], tool: 'robot' 
   return next
 }
 
+
+export function pasteTiles(
+  state: SimulatorState,
+  tiles: Tile[]
+): SimulatorState {
+  if (tiles.length === 0) return state // Stops if there is nothing to paste
+
+  const next = structuredClone(state) // Copies the board so the original stays unchanged
+
+  
+  const robots = tiles.filter((tile) => !tile.isConcrete) // Gets only the copied robots
+  const walls = tiles.filter((tile) => tile.isConcrete) // Gets only the copied walls
+
+  
+  
+  const addedWalls = addConcretes(
+    next.board, // Board where the copied walls will be placed
+    walls.map((wall) => ({ x: wall.x, y: wall.y })) // Positions of copied walls
+  )
+
+  if (addedWalls.length !== walls.length) { // Checks that every wall was added
+    throw new Error('Could not paste all walls.') // Prevents an incomplete paste from being saved
+  }
+
+
+  
+  const addedRobots = addTiles(
+    next.board, // The board we're updating
+    robots.map((robot) => ({ x: robot.x, y: robot.y })) // Positions of copied robots
+  )
+
+  
+  if (addedRobots.length !== robots.length) { // Checks whether every copied robot was placed
+    throw new Error('Could not paste all robots.') // Prevents an incomplete paste from being saved
+  }
+
+  
+  addedRobots.forEach((robot, index) => {
+    const original = robots[index] // Finds the corresponding copied robot
+
+    if (!original) return // Stops if no matching robot exists
+
+    robot.typeId = original.typeId // Keeps the original robot type
+    robot.color = original.color // Keeps the original color
+    robot.label = original.label // Keeps the original label
+  })
+
+
+
+  return next // Temporarily returns the copy until we add placement logic
+}
+
+
 export function exportState(state: SimulatorState): string {
   const { board } = state
   return serializeConfiguration(board.cols, board.rows, allTiles(board).map((t) => {

@@ -54,6 +54,38 @@ export function place(state: SimulatorState, x: number, y: number, tool: 'robot'
   }
   return next
 }
+
+export function moveSelectedTiles(state: SimulatorState, ids: number[], positions: Tile[]): SimulatorState {
+  if (ids.length === 0 || positions.length === 0) return state // Stops if there are no tiles to move
+
+  const next = structuredClone(state) // Creates a copy so the original board stays unchanged
+  const selectedIds = new Set(ids) // Stores the IDs of the selected robots and walls
+
+  
+  const destinationById = new Map(
+    positions.map((tile) => [tile.id, { x: tile.x, y: tile.y }]) // Connects each tile's ID to its new position
+  )
+
+
+  for (const tile of allTiles(next.board)) { // Goes through every robot and wall on the copied board
+    if (!selectedIds.has(tile.id)) continue // Skips tiles that were not selected
+
+    const destination = destinationById.get(tile.id) // Finds this tile's new coordinates
+
+    if (!destination) continue // Skips the tile if no destination was provided
+
+    tile.x = destination.x // Updates the tile's horizontal position
+    tile.y = destination.y // Updates the tile's vertical position
+  }
+
+  
+  reassemble(next) // Rebuilds robot assemblies after their positions change
+
+
+  return next // Temporarily returns the copied board
+}
+
+
 export function removeTiles(state: SimulatorState, ids: number[]): SimulatorState {
   if (!allTiles(state.board).some((t) => ids.includes(t.id))) return state
   const next = structuredClone(state)

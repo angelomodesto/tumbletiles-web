@@ -7,11 +7,13 @@ import type { Configuration } from './engine/xml'
 import { cellSizeFor } from './boardLayout'
 
 
+
 import {
   allTiles, assignType, exportState, fillCells, initialState, loadState,
-  moveState, place, pasteTiles, recordHistory, removeTiles, resize, selectCells,
+  moveSelectedTiles, moveState, place, pasteTiles, recordHistory, removeTiles, resize, selectCells,
   selectRegion, setTypes
 } from './simulatorState'
+
 
 import type { SimulatorState } from './simulatorState'
 import PresetGallery from './PresetGallery'
@@ -29,6 +31,8 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const [selectedCells, setSelectedCells] = useState<number[]>([]) // Stores highlighted board squares, including empty ones
   const [copiedTiles, setCopiedTiles] = useState<typeof tiles>([]) // Stores copies of selected robots and walls
   const [isPasting, setIsPasting] = useState(false) // Tracks whether the user is choosing where to paste
+  const [isMoving, setIsMoving] = useState(false) // Tracks whether the user is choosing where to move selected tiles
+  const [tilesToMove, setTilesToMove] = useState<typeof tiles>([]) // Stores the robots and walls selected for moving
   const [history, setHistory] = useState<SimulatorState[]>([])
   const [error, setError] = useState('')
   const [zoom, setZoom] = useState(1)
@@ -97,6 +101,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       setSelection([]) // Clears selected robots and walls
     }
     setIsPasting(false) // Cancels Paste Mode when switching tools
+    setIsMoving(false) // Cancels Move Mode whenever the user switches tools
     setTool(name)
   }
 
@@ -106,6 +111,49 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   }
 
   
+  function movingOrigin() {
+    if (tilesToMove.length === 0) return null // Stops if no tiles were selected for moving
+
+    return {
+      x: Math.min(...tilesToMove.map((tile) => tile.x)), // Finds the leftmost selected tile
+      y: Math.min(...tilesToMove.map((tile) => tile.y)) // Finds the highest selected tile
+    }
+  }
+
+  
+  function getMovePositions(x: number, y: number) {
+    const origin = movingOrigin() // Finds the original top-left position
+
+    if (!origin) return [] // Stops if no tiles were selected
+
+    return tilesToMove.map((tile) => ({
+      ...tile, // Keeps the tile's existing properties
+      x: x + (tile.x - origin.x), // Calculates the new column
+      y: y + (tile.y - origin.y) // Calculates the new row
+    }))
+  }
+
+  
+  function canMoveAt(x: number, y: number) {
+    const positions = getMovePositions(x, y) // Calculates where the selected tiles would move
+
+    if (positions.length === 0) return false // Stops if nothing is selected
+
+    return positions.every((tile) => {
+      const insideBoard =
+        tile.x >= 0 && tile.x < state.board.cols && // Checks the left and right boundaries
+        tile.y >= 0 && tile.y < state.board.rows // Checks the top and bottom boundaries
+
+      const existingTile = cells.get(tile.y * state.board.cols + tile.x) // Finds any tile at the destination
+      const spaceAvailable = !existingTile || tilesToMove.some((moving) => moving.id === existingTile.id) // Allows empty squares or squares occupied by the moving group
+
+      return insideBoard && spaceAvailable // Every destination square must be valid
+    })
+  }
+
+
+
+
   function copiedOrigin() {
     if (copiedTiles.length === 0) return null // Stops when nothing has been copied
 
@@ -186,7 +234,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   }
   function pointerDown(event: PointerEvent<HTMLDivElement>) {
     
-  if (isPasting) return // Prevents starting a selection while choosing where to paste
+  if (isPasting || isMoving) return // Prevents dragging while Paste Mode or Move Mode is active
     if (event.button !== 0 && event.button !== 1) return
     const pan = tool === 'pan' || event.button === 1
     if (!pan && tool !== 'select') return
@@ -221,7 +269,32 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       setSelectedCells([...new Set([...current.baseCells, ...selectCells(state.board, current.start, end)])])
     }
   }
+
+
   function clickCell(x: number, y: number, shift = false) {
+
+
+    if (isMoving) { // Checks whether Move Mode is active
+    if (!canMoveAt(x, y)) { // Checks whether the selected tiles fit at the destination
+      setError('Cannot move here. The area is occupied or outside the board.') // Shows why the move is invalid
+      return // Stops the move without changing the board
+    }
+
+    
+    edit((current) => moveSelectedTiles(
+      current, // Uses the current simulator state
+      tilesToMove.map((tile) => tile.id), // Gets the IDs of the selected robots and walls
+      getMovePositions(x, y) // Calculates their new positions
+    ))
+
+    setIsMoving(false) // Exits Move Mode after moving
+    setSelection([]) // Clears the selected robots and walls
+    setSelectedCells([]) // Clears highlighted squares 
+    setTilesToMove([]) // Clears the stored moving tiles after the move finishes
+
+    return // Stops clickCell from running the normal selection logic
+
+  }
     
     
     if (isPasting) {
@@ -263,7 +336,12 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       if (keys[event.key]) { event.preventDefault(); move(keys[event.key]); return }
       if (toolKeys[event.key.toLowerCase()]) { event.preventDefault(); chooseTool(toolKeys[event.key.toLowerCase()]); return }
       if (event.key === '?') setShortcuts((value) => !value)
-      if (event.key === 'Escape') clearSelection()
+      if (event.key === 'Escape') {
+        clearSelection() // Clears selected robots, walls, and highlighted squares
+        setIsMoving(false) // Cancels Move Mode
+        setTilesToMove([]) // Clears the stored tiles waiting to be moved
+        setIsPasting(false) // Cancels Paste Mode too
+      }
       if ((event.key === 'Delete' || event.key === 'Backspace') && selection.length) {
         event.preventDefault(); edit((current) => removeTiles(current, selection)); clearSelection()
       }
@@ -313,7 +391,23 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
 
               >
                 Paste
+              </button> 
+
+              
+              <button
+                type="button" // Makes this a regular button
+                className={isMoving ? 'active-tool' : ''} // Highlights Move Mode when active
+                disabled={selection.length === 0} // Requires at least one selected robot or wall
+                onClick={() => {
+                  setTilesToMove(structuredClone(tilesToCopy)) // Saves the selected robots and walls with their original positions
+                  setIsPasting(false) // Turns off Paste Mode
+                  setIsMoving(true) // Activates Move Mode
+                }}
+
+              >
+                Move
               </button>
+
 
 
               <button disabled={!selection.length} onClick={() => { edit((s) => removeTiles(s, selection)); clearSelection() }}>Delete selected</button>
@@ -444,8 +538,8 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
                 }`}
                 style={tile && !tile.isConcrete ? { backgroundColor: type?.color ?? tile.color ?? 'var(--color-robot)' } : undefined}
                 
-                onClick={() => {
-                  if (tool !== 'select' || isPasting) clickCell(x, y) // Allows clicks during Paste Mode
+                onClick={() => {             
+                  if (tool !== 'select' || isPasting || isMoving) clickCell(x, y) // Allows board clicks during Paste Mode or Move Mode
                 }}
 
                 onKeyDown={(e) => {

@@ -9,7 +9,7 @@ import { cellSizeFor } from './boardLayout'
 
 
 import {
-  allTiles, assignType, exportState, fillCells, initialState, loadState,
+  allTiles, assignType, exportState, initialState, loadState,
   moveSelectedTiles, moveState, place, pasteTiles, recordHistory, removeTiles, resize, selectCells,
   selectRegion, setTypes
 } from './simulatorState'
@@ -53,7 +53,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const drag = useRef<null | { start: { x: number; y: number }; base: number[]; baseCells: number[]; pan: boolean; clientX: number; clientY: number; left: number; top: number }>(null)
   const [region, setRegion] = useState<null | { x: number; y: number; width: number; height: number }>(null)
   const types = state.board.robotTypes ?? []
-  const activeType = types.find((t) => t.id === typeId) ?? types[0]
+  const activeType = typeId === '' ? undefined : types.find((t) => t.id === typeId) ?? types[0]
   const tiles = allTiles(state.board)
   const cells = new Map(tiles.map((tile) => [tile.y * state.board.cols + tile.x, tile]))
   const selected = new Set(selection)
@@ -61,7 +61,6 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const tilesToMove = tiles.filter((tile) => movingIds.includes(tile.id)) // Where those pieces are now
   const placing = isPasting || isMoving // Paste or Move Mode: the next board click places the group
   const highlightedCells = new Set(selectedCells) // NEW: Tracks highlighted board positions
-  const emptySelected = selectedCells.filter((index) => !cells.has(index)).length // Highlighted squares a fill would use
   const baseSize = cellSizeFor(state.board.cols, state.board.rows, panelSize.width, panelSize.height)
   const cellSize = baseSize * zoom
 
@@ -87,13 +86,6 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   function move(direction: Direction) {
     edit((current) => moveState(current, direction)) // Moves the robots
     setSelectedCells([]) // Squares are positions, so they no longer match the robots that moved
-  }
-
-  // Fills every highlighted empty square in one undoable step.
-  function fillSelectedCells(fillWith: 'robot' | 'wall') {
-    edit((current) => fillCells(current, selectedCells, fillWith, activeType?.id ?? ''))
-    setSelectedCells([]) // Clears the highlighted squares afterward
-    setSelection([]) // Clears the existing tile selection
   }
 
   // Buttons and keyboard shortcuts both switch tools here, so leaving Select
@@ -417,7 +409,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
               : isMoving ? 'Click a square to move the group. Esc cancels.'
               : 'Drag a rectangle. Shift adds to selection.'}</p>
             {/* Counts get a short line of their own, so no number is long enough to wrap and move what is below. */}
-            <p className="control-hint">{selection.length} selected, {emptySelected} empty</p>
+            <p className="control-hint">{selection.length} selected</p>
             <div className="control-row">
               
               <button
@@ -451,10 +443,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
 
 
               <button disabled={!selection.length} onClick={() => { edit((s) => removeTiles(s, selection)); clearSelection() }}>Delete selected</button>
-              <button disabled={!selection.length || !activeType} onClick={() => edit((s) => assignType(s, selection, activeType!.id))}>Apply type</button>
-              <button disabled={!selection.length} onClick={() => edit((s) => assignType(s, selection))}>Use glues</button>
-              <button disabled={!emptySelected || !activeType} onClick={() => fillSelectedCells('robot')}>Fill with robots</button>
-              <button disabled={!emptySelected} onClick={() => fillSelectedCells('wall')}>Fill with walls</button>
+              <button disabled={!selection.length} onClick={() => edit((s) => assignType(s, selection, activeType?.id))}>Apply type</button>
               <button disabled={!selection.length && !selectedCells.length} onClick={clearSelection}>Deselect</button></div>
           </>}
           {tool === 'pan' && <p className="control-hint">Drag the board to pan. Zoom in for more room.</p>}
@@ -462,19 +451,12 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
         <section className="control-panel">
           <h2>Robot types</h2>
           <label className="field-label">Placement type<select aria-label="Placement type" value={activeType?.id ?? ''} onChange={(e) => setTypeId(e.target.value)}>
+            <option value="">No type (moves separately)</option>
             {types.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
           </select></label>
-          {activeType && <details className="type-editor"><summary>Edit type & sticking</summary>
+          <p className="control-hint">Robots stick only to their own type. Robots with no type stay separate.</p>
+          {activeType && <details className="type-editor"><summary>Edit type</summary>
             <TypeAppearanceEditor key={`${activeType.id}:${activeType.label}:${activeType.color}`} type={activeType} onCommit={updateType} />
-            <p className="control-hint">Sticks to (both directions):</p>
-            {types.map((type) => <label className="rule-option" key={type.id}><input type="checkbox"
-              checked={(state.board.stickingRules ?? []).some(([a, b]) => (a === activeType.id && b === type.id) || (b === activeType.id && a === type.id))}
-              onChange={(e) => {
-                const rules = (state.board.stickingRules ?? []).filter(([a, b]) => !((a === activeType.id && b === type.id) || (b === activeType.id && a === type.id)))
-                if (e.target.checked) rules.push([activeType.id, type.id])
-                edit((s) => setTypes(s, types, rules))
-              }} />{type.label}{type.id === activeType.id ? ' (itself)' : ''}</label>)}
-            <p className="control-hint">When both robots have types, these rules replace side glues. Otherwise matching side glues apply. Assigning a type keeps glue labels; Use glues restores them. Changing rules or types rebuilds bonds.</p>
           </details>}
           <details><summary>Add a type</summary><form className="type-form" onSubmit={(e) => {
             e.preventDefault()
@@ -504,7 +486,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
               const link = document.createElement('a'); link.href = url; link.download = 'tumbletiles-board.xml'; link.click()
               setTimeout(() => URL.revokeObjectURL(url), 1000)
             }}>Export XML</button></div>
-          {state.board.stickingRules?.length ? <p className="control-hint">Custom type rules are saved for this web simulator. Desktop tools may ignore them.</p> : null}
+          <p className="control-hint">Robot types are saved for this web simulator. Desktop tools may ignore them.</p>
         </section>
         <section className="control-panel">
           <h2>Board</h2>

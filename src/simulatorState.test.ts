@@ -15,8 +15,8 @@ function typed() { return setTypes(initialState(), types, [['blue', 'red']]) }
 describe('persistent simulator state', () => {
   it('keeps a bonded pair rigid across repeated commands when only one tile is blocked', () => {
     let state = initialState()
-    addTile(state.board, 1, 1, ['', 'A', '', ''])
-    addTile(state.board, 2, 1, ['', '', '', 'A'])
+    addTile(state.board, 1, 1, ['', 'A', '', ''])!.typeId = 'default'
+    addTile(state.board, 2, 1, ['', '', '', 'A'])!.typeId = 'default'
     addConcrete(state.board, 1, 3)
     activateGlues(state.board)
     state = moveState(state, 'S')
@@ -43,20 +43,30 @@ describe('persistent simulator state', () => {
   })
 })
 describe('robot type rules', () => {
-  it('bonds blue to red in either order, without implicitly bonding blue to blue', () => {
-    for (const [left, right, count] of [['blue', 'red', 1], ['red', 'blue', 1], ['blue', 'blue', 2], ['blue', 'green', 2]] as const) {
+  it('ignores legacy glues for untyped or mixed pairs on import and after movement', () => {
+    for (const typeId of [undefined, 'default']) {
+      const source = initialState()
+      addTile(source.board, 1, 1, ['', 'A', '', ''])!.typeId = typeId
+      addTile(source.board, 2, 1, ['', '', '', 'A'])
+      const imported = loadState(parseConfiguration(exportState(source), parser))
+      expect(imported.board.polyominoes).toHaveLength(2)
+      expect(moveState(imported, 'S').board.polyominoes).toHaveLength(2)
+    }
+  })
+  it('bonds only matching types, ignoring imported cross-type rules', () => {
+    for (const [left, right, count] of [['blue', 'red', 2], ['red', 'blue', 2], ['blue', 'blue', 1], ['blue', 'green', 2]] as const) {
       let state = place(typed(), 1, 1, 'robot', left)
       state = place(state, 2, 1, 'robot', right)
       expect(state.board.polyominoes).toHaveLength(count)
     }
   })
-  it('supports self sticking and no sticking, ignores diagonals and walls', () => {
+  it('supports self sticking and untyped separation, ignores diagonals and walls', () => {
     let state = setTypes(typed(), types, [['blue', 'blue']])
     state = place(place(state, 0, 0, 'robot', 'blue'), 1, 1, 'robot', 'blue')
     expect(state.board.polyominoes).toHaveLength(2)
     state = place(state, 1, 0, 'robot', 'blue')
     expect(state.board.polyominoes).toHaveLength(1)
-    state = setTypes(state, types, [])
+    state = assignType(state, allTiles(state.board).map((tile) => tile.id))
     expect(state.board.polyominoes).toHaveLength(3)
     state = place(state, 2, 0, 'wall', 'blue')
     expect(state.board.concrete).toHaveLength(1)
@@ -88,11 +98,11 @@ describe('XML round trips', () => {
     expect(restored.board.polyominoes[0].tiles[0].glues).toEqual(['A&<"', 'strong', '', ''])
   })
   it('preserves typed assemblies, colors and rules, then moves identically', () => {
-    let state = place(place(typed(), 1, 1, 'robot', 'blue'), 2, 1, 'robot', 'red')
+    let state = place(place(typed(), 1, 1, 'robot', 'blue'), 2, 1, 'robot', 'blue')
     state = place(state, 1, 3, 'wall', 'blue')
     const restored = loadState(parseConfiguration(exportState(state), parser))
     expect(restored.board.robotTypes).toEqual(types)
-    expect(restored.board.stickingRules).toEqual([['blue', 'red']])
+    expect(restored.board.stickingRules).toEqual(types.map((type) => [type.id, type.id]))
     expect(restored.board.polyominoes).toHaveLength(1)
     const positions = (s: typeof state) => allTiles(s.board).map((t) => [t.x, t.y]).sort()
     expect(positions(moveState(restored, 'S'))).toEqual(positions(moveState(state, 'S')))
@@ -101,7 +111,7 @@ describe('XML round trips', () => {
 
 describe('metadata-only edits', () => {
   it('renaming and recoloring a type leaves saved assemblies intact', () => {
-    let state = place(place(typed(), 0, 0, 'robot', 'blue'), 1, 0, 'robot', 'red')
+    let state = place(place(typed(), 0, 0, 'robot', 'blue'), 1, 0, 'robot', 'blue')
     const ids = state.board.polyominoes.map((p) => p.id)
     state = setTypes(state, types.map((t) => ({ ...t, label: t.label + ' renamed', color: '#123456' })), [['blue', 'red']])
     expect(state.board.polyominoes.map((p) => p.id)).toEqual(ids)
@@ -114,7 +124,7 @@ describe('metadata-only edits', () => {
 })
 
 describe('review regressions: retain imported glues', () => {
-  it('keeps Cat glue labels through type assignment and export, then restores glue behavior', async () => {
+  it('keeps Cat glue labels through assignment and export, while untyped robots stay separate', async () => {
     const { default: cat } = await import('../public/presets/Cat.xml?raw')
     const original = loadState(parseConfiguration(cat, parser))
     const ids = allTiles(original.board).map((t) => t.id)
@@ -187,19 +197,19 @@ describe('filling selected squares', () => {
 })
 
 describe('copy, paste and move', () => {
-  // Two robots side by side whose facing glues match, so they start bonded.
+  // Two robots of the same type start bonded; glue labels remain saved.
   function gluedPair() {
     const state = initialState()
     state.glueFunction = { A: 1 }
-    addTile(state.board, 1, 1, ['', 'A', '', ''])
-    addTile(state.board, 2, 1, ['', '', '', 'A'])
+    addTile(state.board, 1, 1, ['', 'A', '', ''])!.typeId = 'default'
+    addTile(state.board, 2, 1, ['', '', '', 'A'])!.typeId = 'default'
     activateGlues(state.board, state.glueFunction)
     return state
   }
   const shifted = (state: ReturnType<typeof initialState>, dx: number, dy: number) =>
     allTiles(state.board).map((t) => ({ ...t, x: t.x + dx, y: t.y + dy }))
 
-  it('pastes robots with their glue labels, and bonds them straight away', () => {
+  it('pastes robots with their glue labels, and bonds matching types straight away', () => {
     const start = gluedPair()
     const after = pasteTiles(start, shifted(start, 0, 5))
     const pasted = allTiles(after.board).filter((t) => t.y === 6)

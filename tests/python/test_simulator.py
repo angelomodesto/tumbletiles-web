@@ -24,12 +24,11 @@ def oracle(config, commands):
     """Find the greatest simultaneously movable set by pruning blocked groups.
 
     Bonds are graph connected components of adjacent permitted contacts.
-    Two typed tiles use the type matrix; other pairs use facing glue labels.
+    Only adjacent robots with the same nonempty type bond, regardless of glues or imported rules.
     The oracle does not import or translate TypeScript source.
     """
     groups = [[copy.deepcopy(t)] for t in config['tiles'] if not t['isConcrete']]
     walls = {(t['x'], t['y']) for t in config['tiles'] if t['isConcrete']}
-    rules = {frozenset(pair) for pair in config['stickingRules']}
 
     def bond():
         nonlocal groups
@@ -43,11 +42,7 @@ def oracle(config, commands):
             faces = {(0, -1): (0, 2), (1, 0): (1, 3), (0, 1): (2, 0), (-1, 0): (3, 1)}
             if (dx, dy) not in faces:
                 return False
-            if a.get('typeId') is not None and b.get('typeId') is not None:
-                return frozenset((a['typeId'], b['typeId'])) in rules
-            face_a, face_b = faces[(dx, dy)]
-            label_a, label_b = a['glues'][face_a], b['glues'][face_b]
-            return bool(label_a) and label_a == label_b and config['glueFunction'].get(label_a, 1) >= 1
+            return a.get('typeId') is not None and a['typeId'] == b.get('typeId')
 
         for i, left in enumerate(groups):
             for j in range(i):
@@ -132,7 +127,7 @@ class EngineReferenceTests(unittest.TestCase):
             strengths = {f.find('Labels').attrib['L1']: float(f.findtext('Strength')) for f in doc.findall('./GlueFunction/Function')}
             self.assertEqual(strengths, scenario['config']['glueFunction'])
             rules = [[r.attrib['a'], r.attrib['b']] for r in doc.findall('./StickingRules/Sticking')]
-            self.assertEqual(rules, scenario['config']['stickingRules'])
+            self.assertEqual(rules, [[t['id'], t['id']] for t in scenario['config']['robotTypes']])
             self.assertEqual([t.attrib['label'] for t in doc.findall('./RobotTypes/RobotType')],
                              [t['label'] for t in scenario['config']['robotTypes']])
             self.assertEqual(sorted(tuple(t.findtext(tag) for tag in ['NorthGlue', 'EastGlue', 'SouthGlue', 'WestGlue'])

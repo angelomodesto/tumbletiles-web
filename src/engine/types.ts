@@ -67,4 +67,6 @@ export interface Board {
   nextPolyId: number
   robotTypes?: RobotType[]
   stickingRules?: StickingRule[]
+  /** Simplified editor policy; legacy engine boards retain directional glues. */
+  bondingMode?: 'same-type'
 }

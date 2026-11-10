@@ -123,6 +123,60 @@ export function addConcrete(board: Board, x: number, y: number): Tile | undefine
   return tile
 }
 
+/**
+ * Adds a tile in a polyomino of its own at each free position, as repeated
+ * addTile calls would, but builds the occupancy map once instead of once per
+ * tile. Positions off the board, already taken, or repeated in the list are
+ * skipped. Returns the tiles added, in order.
+ */
+export function addTiles(board: Board, positions: Position[], glues: Glues = NO_GLUES): Tile[] {
+  const taken = occupancy(board)
+  const added: Tile[] = []
+
+  for (const { x, y } of positions) {
+    if (!inBounds(board, x, y) || taken.has(keyOf(x, y))) continue
+
+    const polyId = board.nextPolyId++
+    const tile: Tile = {
+      id: board.nextTileId++,
+      x,
+      y,
+      polyId,
+      glues: [...glues] as Glues,
+      isConcrete: false,
+    }
+    board.polyominoes.push({ id: polyId, tiles: [tile] })
+    taken.set(keyOf(x, y), tile)
+    added.push(tile)
+  }
+
+  return added
+}
+
+/** Adds a wall at each free position; the batch form of addConcrete. */
+export function addConcretes(board: Board, positions: Position[]): Tile[] {
+  const taken = occupancy(board)
+  const added: Tile[] = []
+
+  for (const { x, y } of positions) {
+    if (!inBounds(board, x, y) || taken.has(keyOf(x, y))) continue
+
+    const tile: Tile = {
+      id: board.nextTileId++,
+      x,
+      y,
+      polyId: CONCRETE_POLY_ID,
+      glues: [...NO_GLUES] as Glues,
+      isConcrete: true,
+    }
+    board.concrete.push(tile)
+    taken.set(keyOf(x, y), tile)
+    added.push(tile)
+  }
+
+  return added
+}
+
 /** Converts a position to the flat cell index the interface uses. */
 export function toIndex(position: Position, cols: number): number {
   return position.y * cols + position.x

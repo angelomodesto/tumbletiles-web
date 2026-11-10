@@ -1,4 +1,4 @@
-import { activateGlues, addConcrete, addTile, createBoard, tumble } from './engine'
+import { activateGlues, addConcrete, addConcretes, addTile, addTiles, createBoard, fromIndex, tumble } from './engine'
 import type { Board, Direction, GlueFunction, Tile } from './engine'
 import type { RobotType, StickingRule } from './engine/types'
 import { MAX_BOARD_SIZE, configurationToBoard, serializeConfiguration } from './engine/xml'
@@ -97,6 +97,49 @@ export function selectRegion(board: Board, start: { x: number; y: number }, end:
   return allTiles(board).filter((t) => t.x >= Math.min(start.x, end.x) && t.x <= Math.max(start.x, end.x)
     && t.y >= Math.min(start.y, end.y) && t.y <= Math.max(start.y, end.y)).map((t) => t.id)
 }
+
+
+// Returns every square inside the dragged rectangle, including empty squares.
+export function selectCells(
+  board: Board,
+  start: { x: number; y: number },
+  end: { x: number; y: number }
+): number[] {
+  const cells: number[] = [] // Stores the selected square positions
+
+  const minX = Math.max(0, Math.min(start.x, end.x)) // Left boundary
+  const maxX = Math.min(board.cols - 1, Math.max(start.x, end.x)) // Right boundary
+  const minY = Math.max(0, Math.min(start.y, end.y)) // Top boundary
+  const maxY = Math.min(board.rows - 1, Math.max(start.y, end.y)) // Bottom boundary
+
+  for (let y = minY; y <= maxY; y++) { // Goes through each row
+    for (let x = minX; x <= maxX; x++) { // Goes through each column
+      cells.push(y * board.cols + x) // Converts the square to its board index
+    }
+  }
+
+  return cells // Returns all selected squares
+}
+
+
+/**
+ * Fills the given board squares with robots of one type, or with walls, as a
+ * single edit: one copy of the board and one glue pass, however many squares.
+ * Occupied squares are skipped. Returns the same state when nothing is placed,
+ * so an empty fill never becomes an undo step.
+ */
+export function fillCells(state: SimulatorState, cells: number[], tool: 'robot' | 'wall', typeId: string): SimulatorState {
+  if (tool === 'robot' && !state.board.robotTypes?.some((t) => t.id === typeId)) return state
+  const positions = cells.map((index) => fromIndex(index, state.board.cols))
+  const next = structuredClone(state)
+  if (tool === 'wall') return addConcretes(next.board, positions).length ? next : state
+  const added = addTiles(next.board, positions)
+  if (!added.length) return state
+  for (const tile of added) tile.typeId = typeId
+  activateGlues(next.board, next.glueFunction)
+  return next
+}
+
 export function exportState(state: SimulatorState): string {
   const { board } = state
   return serializeConfiguration(board.cols, board.rows, allTiles(board).map((t) => {

@@ -3,7 +3,7 @@ import { DOMParser } from '@xmldom/xmldom'
 import type { XmlParser } from './engine/xml'
 import { MAX_BOARD_SIZE, parseConfiguration } from './engine/xml'
 import { addConcrete, addTile, activateGlues } from './engine'
-import { allTiles, assignType, exportState, initialState, loadState, moveState, place, recordHistory, removeTiles, resize, selectRegion, setTypes } from './simulatorState'
+import { allTiles, assignType, exportState, fillCells, initialState, loadState, moveState, place, recordHistory, removeTiles, resize, selectCells, selectRegion, setTypes } from './simulatorState'
 const parser = new DOMParser() as unknown as XmlParser
 const types = [
   { id: 'blue', label: 'Blue & <one> "robot"', color: '#0066ff' },
@@ -154,5 +154,34 @@ describe('review regressions: meaningful undo entries', () => {
   it('uses the shared import cap for resizing, including the boundary', () => {
     expect(resize(initialState(), MAX_BOARD_SIZE, MAX_BOARD_SIZE).board.cols).toBe(MAX_BOARD_SIZE)
     expect(() => resize(initialState(), MAX_BOARD_SIZE + 1, 1)).toThrow(/dimensions/)
+  })
+})
+
+describe('filling selected squares', () => {
+  const shape = (state: ReturnType<typeof initialState>) => ({
+    walls: state.board.concrete.map((t) => [t.x, t.y]).sort(),
+    groups: state.board.polyominoes.map((p) => p.tiles.map((t) => [t.x, t.y, t.typeId]).sort()).sort(),
+  })
+
+  it('builds exactly the board that placing square by square would', () => {
+    let start = setTypes(initialState(), types, [['blue', 'blue']])
+    start = place(place(start, 2, 2, 'wall', 'blue'), 0, 0, 'robot', 'red')
+    const cells = selectCells(start.board, { x: 0, y: 0 }, { x: 4, y: 3 })
+    for (const tool of ['robot', 'wall'] as const) {
+      const oneByOne = cells.reduce((s, i) => place(s, i % s.board.cols, Math.floor(i / s.board.cols), tool, 'blue'), start)
+      expect(shape(fillCells(start, cells, tool, 'blue'))).toEqual(shape(oneByOne))
+    }
+  })
+
+  it('returns the same state when nothing can be placed, so undo gains no step', () => {
+    const start = place(initialState(), 0, 0, 'wall', 'default')
+    expect(fillCells(start, [0], 'robot', 'default')).toBe(start)
+    expect(fillCells(start, [], 'wall', 'default')).toBe(start)
+    expect(fillCells(start, [5], 'robot', 'missing-type')).toBe(start)
+  })
+
+  it('clamps a dragged rectangle to the board', () => {
+    const state = resize(initialState(), 3, 3)
+    expect(selectCells(state.board, { x: -4, y: -4 }, { x: 9, y: 1 })).toEqual([0, 1, 2, 3, 4, 5])
   })
 })

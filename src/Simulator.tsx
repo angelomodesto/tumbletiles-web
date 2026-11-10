@@ -5,7 +5,24 @@ import type { RobotType } from './engine/types'
 import { MAX_BOARD_SIZE, parseConfiguration } from './engine/xml'
 import type { Configuration } from './engine/xml'
 import { cellSizeFor } from './boardLayout'
-import { allTiles, assignType, exportState, initialState, loadState, moveState, place, recordHistory, removeTiles, resize, selectRegion, setTypes } from './simulatorState'
+
+import {
+  allTiles,
+  assignType,
+  exportState,
+  fillCells,
+  initialState,
+  loadState,
+  moveState,
+  place,
+  recordHistory,
+  removeTiles,
+  resize,
+  selectCells, // NEW: Selects board squares, including empty ones
+  selectRegion, // EXISTING: Selects robots and walls by their IDs
+  setTypes
+} from './simulatorState'
+
 import type { SimulatorState } from './simulatorState'
 import PresetGallery from './PresetGallery'
 import TypeAppearanceEditor from './TypeAppearanceEditor'
@@ -19,6 +36,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const [tool, setTool] = useState<Tool>('robot')
   const [typeId, setTypeId] = useState(state.board.robotTypes?.[0]?.id ?? 'default')
   const [selection, setSelection] = useState<number[]>([])
+  const [selectedCells, setSelectedCells] = useState<number[]>([]) // Stores highlighted board squares, including empty ones
   const [history, setHistory] = useState<SimulatorState[]>([])
   const [error, setError] = useState('')
   const [zoom, setZoom] = useState(1)
@@ -34,13 +52,15 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const message = useRef<HTMLParagraphElement>(null)
   const dialog = useRef<HTMLDialogElement>(null)
   const libraryButton = useRef<HTMLButtonElement>(null)
-  const drag = useRef<null | { start: { x: number; y: number }; base: number[]; pan: boolean; clientX: number; clientY: number; left: number; top: number }>(null)
+  const drag = useRef<null | { start: { x: number; y: number }; base: number[]; baseCells: number[]; pan: boolean; clientX: number; clientY: number; left: number; top: number }>(null)
   const [region, setRegion] = useState<null | { x: number; y: number; width: number; height: number }>(null)
   const types = state.board.robotTypes ?? []
   const activeType = types.find((t) => t.id === typeId) ?? types[0]
   const tiles = allTiles(state.board)
   const cells = new Map(tiles.map((tile) => [tile.y * state.board.cols + tile.x, tile]))
   const selected = new Set(selection)
+  const highlightedCells = new Set(selectedCells) // NEW: Tracks highlighted board positions
+  const emptySelected = selectedCells.filter((index) => !cells.has(index)).length // Highlighted squares a fill would use
   const baseSize = cellSizeFor(state.board.cols, state.board.rows, panelSize.width, panelSize.height)
   const cellSize = baseSize * zoom
 
@@ -58,13 +78,47 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     if (!previous) return
     setState(previous)
     setWidth(String(previous.board.cols)); setHeight(String(previous.board.rows))
-    setHistory((items) => items.slice(0, -1)); setSelection([]); setError('')
+    setHistory((items) => items.slice(0, -1)) // Removes the last history entry
+    setSelection([]) // Clears selected robots and walls
+    setSelectedCells([]) // Clears highlighted board squares
+    setError('') // Clears error messages
   }
-  function move(direction: Direction) { edit((current) => moveState(current, direction)) }
+  function move(direction: Direction) {
+    edit((current) => moveState(current, direction)) // Moves the robots
+    setSelectedCells([]) // Squares are positions, so they no longer match the robots that moved
+  }
+
+  // Fills every highlighted empty square in one undoable step.
+  function fillSelectedCells(fillWith: 'robot' | 'wall') {
+    edit((current) => fillCells(current, selectedCells, fillWith, activeType?.id ?? ''))
+    setSelectedCells([]) // Clears the highlighted squares afterward
+    setSelection([]) // Clears the existing tile selection
+  }
+
+  // Buttons and keyboard shortcuts both switch tools here, so leaving Select
+  // always clears the selection the same way.
+  function chooseTool(name: Tool) {
+    if (name !== 'select') {
+      setSelectedCells([]) // Removes the highlighted squares
+      setSelection([]) // Clears selected robots and walls
+    }
+    setTool(name)
+  }
+
+  function clearSelection() {
+    setSelection([]) // Clears selected robots and walls
+    setSelectedCells([]) // Clears highlighted squares
+  }
+
   function load(config: Configuration) {
     edit(() => loadState(config))
     setTypeId(config.robotTypes?.[0]?.id ?? 'default')
-    setSelection([]); setWidth(String(config.cols)); setHeight(String(config.rows)); fit(); setLibrary(false)
+    setSelection([]) // Clears selected robots and walls
+    setSelectedCells([]) // Clears highlighted board squares
+    setWidth(String(config.cols))
+    setHeight(String(config.rows))
+    fit()
+    setLibrary(false)
   }
   function fit() {
     setZoom(1)
@@ -85,11 +139,14 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     if (!pan && tool !== 'select') return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
-    drag.current = { start: cellAt(event), base: event.shiftKey ? selection : [], pan,
+    // Shift keeps what was selected when the drag began; the rectangle is added to that.
+    drag.current = { start: cellAt(event), base: event.shiftKey ? selection : [], baseCells: event.shiftKey ? selectedCells : [], pan,
       clientX: event.clientX, clientY: event.clientY, left: panel.current!.scrollLeft, top: panel.current!.scrollTop }
+
     if (!pan) {
-      const ids = selectRegion(state.board, drag.current.start, drag.current.start)
-      setSelection(event.shiftKey ? [...new Set([...selection, ...ids])] : ids)
+      const start = drag.current.start // Gets the square where the mouse was pressed
+      setSelection([...new Set([...drag.current.base, ...selectRegion(state.board, start, start)])])
+      setSelectedCells([...new Set([...drag.current.baseCells, ...selectCells(state.board, start, start)])])
     }
   }
   function pointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -99,10 +156,16 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       panel.current!.scrollLeft = current.left - event.clientX + current.clientX
       panel.current!.scrollTop = current.top - event.clientY + current.clientY
     } else {
-      const end = cellAt(event)
-      setRegion({ x: Math.min(end.x, current.start.x), y: Math.min(end.y, current.start.y),
-        width: Math.abs(end.x - current.start.x) + 1, height: Math.abs(end.y - current.start.y) + 1 })
+      const end = cellAt(event) // Gets the square currently under the mouse
+      setRegion({
+        x: Math.min(end.x, current.start.x), // Left edge
+        y: Math.min(end.y, current.start.y), // Top edge
+        width: Math.abs(end.x - current.start.x) + 1, // Rectangle width
+        height: Math.abs(end.y - current.start.y) + 1 // Rectangle height
+      })
+      // Both start again from the snapshot, so dragging back in shrinks the selection.
       setSelection([...new Set([...current.base, ...selectRegion(state.board, current.start, end)])])
+      setSelectedCells([...new Set([...current.baseCells, ...selectCells(state.board, current.start, end)])])
     }
   }
   function clickCell(x: number, y: number, shift = false) {
@@ -142,11 +205,11 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       const target = event.target as HTMLElement
       if (library || event.ctrlKey || event.metaKey || event.altKey || target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
       if (keys[event.key]) { event.preventDefault(); move(keys[event.key]); return }
-      if (toolKeys[event.key.toLowerCase()]) { event.preventDefault(); setTool(toolKeys[event.key.toLowerCase()]); return }
+      if (toolKeys[event.key.toLowerCase()]) { event.preventDefault(); chooseTool(toolKeys[event.key.toLowerCase()]); return }
       if (event.key === '?') setShortcuts((value) => !value)
-      if (event.key === 'Escape') setSelection([])
+      if (event.key === 'Escape') clearSelection()
       if ((event.key === 'Delete' || event.key === 'Backspace') && selection.length) {
-        event.preventDefault(); edit((current) => removeTiles(current, selection)); setSelection([])
+        event.preventDefault(); edit((current) => removeTiles(current, selection)); clearSelection()
       }
     }
     window.addEventListener('keydown', handle)
@@ -166,13 +229,17 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
         <section className="control-panel">
           <h2>Tools</h2>
           <div className="control-row">{(['robot', 'wall', 'erase', 'select', 'pan'] as Tool[]).map((name) => <button type="button" key={name}
-            aria-pressed={tool === name} className={tool === name ? 'active-tool' : ''} onClick={() => setTool(name)}>{name}</button>)}</div>
+            aria-pressed={tool === name} className={tool === name ? 'active-tool' : ''} onClick={() => chooseTool(name)}>{name}</button>)}</div>
           {tool === 'select' && <>
-            <p className="control-hint">Drag a rectangle. Shift adds to selection. {selection.length} selected.</p>
-            <div className="control-row"><button disabled={!selection.length} onClick={() => { edit((s) => removeTiles(s, selection)); setSelection([]) }}>Delete selected</button>
+            <p className="control-hint">Drag a rectangle. Shift adds to selection.</p>
+            {/* Counts get a short line of their own, so no number is long enough to wrap and move what is below. */}
+            <p className="control-hint">{selection.length} selected, {emptySelected} empty</p>
+            <div className="control-row"><button disabled={!selection.length} onClick={() => { edit((s) => removeTiles(s, selection)); clearSelection() }}>Delete selected</button>
               <button disabled={!selection.length || !activeType} onClick={() => edit((s) => assignType(s, selection, activeType!.id))}>Apply type</button>
               <button disabled={!selection.length} onClick={() => edit((s) => assignType(s, selection))}>Use glues</button>
-              <button disabled={!selection.length} onClick={() => setSelection([])}>Deselect</button></div>
+              <button disabled={!emptySelected || !activeType} onClick={() => fillSelectedCells('robot')}>Fill with robots</button>
+              <button disabled={!emptySelected} onClick={() => fillSelectedCells('wall')}>Fill with walls</button>
+              <button disabled={!selection.length && !selectedCells.length} onClick={clearSelection}>Deselect</button></div>
           </>}
           {tool === 'pan' && <p className="control-hint">Drag the board to pan. Zoom in for more room.</p>}
         </section>
@@ -225,13 +292,46 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
         </section>
         <section className="control-panel">
           <h2>Board</h2>
-          <form className="control-row" onSubmit={(e) => { e.preventDefault(); edit((s) => resize(s, Number(width), Number(height))) }}>
+          
+        <form className="control-row" onSubmit={(e) => {
+          e.preventDefault() // Prevents the page from refreshing
+
+          const newWidth = Number(width) // Gets the requested width
+          const newHeight = Number(height) // Gets the requested height
+
+          try {
+            const next = resize(state, newWidth, newHeight) // Validates and resizes the board
+
+            if (next !== state) {
+              edit(() => next) // Saves the resize in undo history
+              setSelection([]) // Clears selected robots and walls
+              setSelectedCells([]) // Clears highlighted squares
+            }
+          } catch (error) {
+            setError(error instanceof Error ? error.message : 'Could not resize the board.')
+          }
+        }}>
+
             <label>Width<input aria-label="Width" type="number" min="1" max={MAX_BOARD_SIZE} required value={width} onChange={(e) => setWidth(e.target.value)} /></label>
             <label>Height<input aria-label="Height" type="number" min="1" max={MAX_BOARD_SIZE} required value={height} onChange={(e) => setHeight(e.target.value)} /></label>
             <button type="submit">Resize board</button>
           </form><p className="control-hint">Up to {MAX_BOARD_SIZE} × {MAX_BOARD_SIZE}. Shrinking keeps all tiles safe.</p>
         </section>
-        <div className="control-danger"><button onClick={() => { edit((s) => ({ ...initialState(), board: { ...s.board, polyominoes: [], concrete: [] } })); setSelection([]) }}>Clear board</button></div>
+        
+        <div className="control-danger">
+          <button onClick={() => {
+            edit((s) => ({
+              ...initialState(),
+              board: { ...s.board, polyominoes: [], concrete: [] }
+            })) // Clears the board while keeping its dimensions and settings
+
+            setSelection([]) // Clears selected robots and walls
+            setSelectedCells([]) // Clears highlighted squares
+          }}>
+            Clear board
+          </button>
+        </div>
+
       </aside>
       <main className="simulator-stage">
         <p className="narrow-note">This screen is narrow for a board. The board scrolls inside its panel; a wider screen is easier. The tutorial reads well at this size.</p>
@@ -242,7 +342,6 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
           <button onClick={fit}>Fit board</button>
           <button disabled={!history.length} onClick={undo}>Undo</button>
         </div>
-        {error && <p className="board-error" role="alert">{error}</p>}
         <div ref={panel} className={`board-panel editor-board-panel ${tool === 'pan' ? 'pan-tool' : ''}`}>
           <div ref={grid} className="board-grid editor-grid" aria-label="Simulation board" role="group"
             onPointerDown={pointerDown} onPointerMove={pointerMove}
@@ -256,7 +355,11 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
               return <div key={index} role="button" tabIndex={0} aria-label={`Column ${x + 1}, row ${y + 1}: ${label}`}
                 aria-pressed={tile ? selected.has(tile.id) : false}
                 title={label === 'empty' ? undefined : label}
-                className={`board-cell ${tile ? tile.isConcrete ? 'wall' : 'robot' : ''} ${tile && selected.has(tile.id) ? 'selected-cell' : ''}`}
+                className={`board-cell ${tile ? tile.isConcrete ? 'wall' : 'robot' : ''} ${
+                  (tile && selected.has(tile.id)) || highlightedCells.has(index)
+                    ? 'selected-cell' // Highlights selected robots, walls, AND empty squares
+                    : ''
+                }`}
                 style={tile && !tile.isConcrete ? { backgroundColor: type?.color ?? tile.color ?? 'var(--color-robot)' } : undefined}
                 onClick={() => { if (tool !== 'select') clickCell(x, y) }}
                 onKeyDown={(e) => {
@@ -267,6 +370,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
           </div>
           <p ref={message} className="board-message board-message-empty">{!tiles.length ? 'Empty board. Pick a tool and click a square, or load a configuration.' : ''}</p>
         </div>
+        {error && <p className="board-error" role="alert">{error}</p>}
         <div className="status-bar" aria-live="polite">
           <span><b>Tool</b> {tool}</span><span><b>Board</b> {state.board.cols} × {state.board.rows}</span>
           <span><b>Robots</b> {tiles.length - state.board.concrete.length}</span><span><b>Walls</b> {state.board.concrete.length}</span>

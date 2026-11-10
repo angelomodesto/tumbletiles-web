@@ -31,6 +31,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const [newColor, setNewColor] = useState('#3578d4')
   const panel = useRef<HTMLDivElement>(null)
   const grid = useRef<HTMLDivElement>(null)
+  const message = useRef<HTMLParagraphElement>(null)
   const dialog = useRef<HTMLDialogElement>(null)
   const libraryButton = useRef<HTMLButtonElement>(null)
   const drag = useRef<null | { start: { x: number; y: number }; base: number[]; pan: boolean; clientX: number; clientY: number; left: number; top: number }>(null)
@@ -40,8 +41,8 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const tiles = allTiles(state.board)
   const cells = new Map(tiles.map((tile) => [tile.y * state.board.cols + tile.x, tile]))
   const selected = new Set(selection)
-  const baseSize = cellSizeFor(state.board.cols, state.board.rows, panelSize.width - 34, panelSize.height - 90)
-  const cellSize = Math.max(4, Math.round(baseSize * zoom))
+  const baseSize = cellSizeFor(state.board.cols, state.board.rows, panelSize.width, panelSize.height)
+  const cellSize = baseSize * zoom
 
   function edit(action: (current: SimulatorState) => SimulatorState) {
     try {
@@ -114,7 +115,20 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   }
 
   useEffect(() => {
-    const observer = new ResizeObserver(([entry]) => setPanelSize({ width: entry.contentRect.width, height: entry.contentRect.height }))
+    const observer = new ResizeObserver(([entry]) => {
+      if (!panel.current || !grid.current || !message.current) return
+      const panelStyle = getComputedStyle(panel.current)
+      const gridStyle = getComputedStyle(grid.current)
+      const messageStyle = getComputedStyle(message.current)
+      // contentRect excludes panel padding/borders. Reserve the grid border and
+      // the message's full height, margins and flex gap before sizing cells.
+      setPanelSize({
+        width: Math.max(0, entry.contentRect.width - parseFloat(gridStyle.borderLeftWidth) - parseFloat(gridStyle.borderRightWidth)),
+        height: Math.max(0, entry.contentRect.height - message.current.getBoundingClientRect().height
+          - parseFloat(messageStyle.marginTop) - parseFloat(messageStyle.marginBottom) - parseFloat(panelStyle.rowGap)
+          - parseFloat(gridStyle.borderTopWidth) - parseFloat(gridStyle.borderBottomWidth)),
+      })
+    })
     if (panel.current) observer.observe(panel.current)
     return () => observer.disconnect()
   }, [])
@@ -251,7 +265,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
             })}
             {region && <div className="selection-region" style={{ left: region.x * cellSize, top: region.y * cellSize, width: region.width * cellSize, height: region.height * cellSize }} />}
           </div>
-          <p className="board-message board-message-empty">{!tiles.length ? 'Empty board. Pick a tool and click a square, or load a configuration.' : ''}</p>
+          <p ref={message} className="board-message board-message-empty">{!tiles.length ? 'Empty board. Pick a tool and click a square, or load a configuration.' : ''}</p>
         </div>
         <div className="status-bar" aria-live="polite">
           <span><b>Tool</b> {tool}</span><span><b>Board</b> {state.board.cols} × {state.board.rows}</span>

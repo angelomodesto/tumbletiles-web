@@ -14,6 +14,7 @@
 .editor-board-panel { height: min(65vh, 620px); min-height: 380px; align-items: safe center; justify-content: safe center; }
 .editor-grid { position: relative; flex: 0 0 auto; touch-action: none; user-select: none; margin: auto; }
 .editor-grid .board-cell { padding: 0; }
+.editor-board-panel .board-message { flex-shrink: 0; }
 .editor-grid .board-cell:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -3px; }
 .editor-grid .selected-cell { box-shadow: inset 0 0 0 2px var(--color-surface), inset 0 0 0 4px var(--color-border); }
 .selection-region { position: absolute; pointer-events: none; border: 2px dashed var(--color-text); background: var(--color-selection-fill); box-sizing: border-box; }

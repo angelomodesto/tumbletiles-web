@@ -60,34 +60,40 @@ export function place(state: SimulatorState, x: number, y: number, tool: 'robot'
   return next
 }
 
+/**
+ * Moves the given robots and walls to new positions as one edit, then re-bonds
+ * whatever now touches. The whole move is refused, never half done, when any
+ * destination is off the board, under a piece that is not moving, or shared by
+ * two pieces. Returns the same state when nothing would actually move.
+ */
 export function moveSelectedTiles(state: SimulatorState, ids: number[], positions: Tile[]): SimulatorState {
   if (ids.length === 0 || positions.length === 0) return state // Stops if there are no tiles to move
 
-  const next = structuredClone(state) // Creates a copy so the original board stays unchanged
+  const { cols, rows } = state.board
   const selectedIds = new Set(ids) // Stores the IDs of the selected robots and walls
+  const destinationById = new Map(positions.map((tile) => [tile.id, { x: tile.x, y: tile.y }])) // Each tile's new position
+  const moving = allTiles(state.board).filter((tile) => selectedIds.has(tile.id))
+  const staying = new Set(allTiles(state.board).filter((tile) => !selectedIds.has(tile.id)).map((tile) => tile.y * cols + tile.x))
+  const landing = new Set<number>()
 
-  
-  const destinationById = new Map(
-    positions.map((tile) => [tile.id, { x: tile.x, y: tile.y }]) // Connects each tile's ID to its new position
-  )
-
-
-  for (const tile of allTiles(next.board)) { // Goes through every robot and wall on the copied board
-    if (!selectedIds.has(tile.id)) continue // Skips tiles that were not selected
-
-    const destination = destinationById.get(tile.id) // Finds this tile's new coordinates
-
-    if (!destination) continue // Skips the tile if no destination was provided
-
-    tile.x = destination.x // Updates the tile's horizontal position
-    tile.y = destination.y // Updates the tile's vertical position
+  for (const tile of moving) {
+    const to = destinationById.get(tile.id)
+    if (!to) throw new Error('Every selected piece needs a destination.')
+    const index = to.y * cols + to.x
+    if (to.x < 0 || to.y < 0 || to.x >= cols || to.y >= rows || staying.has(index) || landing.has(index)) {
+      throw new Error('Cannot move here. The area is occupied or outside the board.')
+    }
+    landing.add(index)
   }
+  if (moving.every((tile) => destinationById.get(tile.id)?.x === tile.x && destinationById.get(tile.id)?.y === tile.y)) return state
 
-  
+  const next = structuredClone(state) // Creates a copy so the original board stays unchanged
+  for (const tile of allTiles(next.board)) {
+    const to = destinationById.get(tile.id)
+    if (selectedIds.has(tile.id) && to) { tile.x = to.x; tile.y = to.y }
+  }
   reassemble(next) // Rebuilds robot assemblies after their positions change
-
-
-  return next // Temporarily returns the copied board
+  return next
 }
 
 
@@ -179,6 +185,12 @@ export function fillCells(state: SimulatorState, cells: number[], tool: 'robot' 
 }
 
 
+/**
+ * Places copies of robots and walls at the positions given, as one edit. Each
+ * robot keeps its type, colour, label and glue labels, and robots that now
+ * touch bond straight away, as placing and filling do. The whole paste is
+ * refused, never half done, when any square is taken or off the board.
+ */
 export function pasteTiles(
   state: SimulatorState,
   tiles: Tile[]
@@ -186,49 +198,27 @@ export function pasteTiles(
   if (tiles.length === 0) return state // Stops if there is nothing to paste
 
   const next = structuredClone(state) // Copies the board so the original stays unchanged
-
-  
   const robots = tiles.filter((tile) => !tile.isConcrete) // Gets only the copied robots
   const walls = tiles.filter((tile) => tile.isConcrete) // Gets only the copied walls
+  const refused = 'Cannot paste here. The area is occupied or outside the board.'
 
-  
-  
-  const addedWalls = addConcretes(
-    next.board, // Board where the copied walls will be placed
-    walls.map((wall) => ({ x: wall.x, y: wall.y })) // Positions of copied walls
-  )
+  const addedWalls = addConcretes(next.board, walls.map((wall) => ({ x: wall.x, y: wall.y })))
+  if (addedWalls.length !== walls.length) throw new Error(refused) // Prevents an incomplete paste from being saved
 
-  if (addedWalls.length !== walls.length) { // Checks that every wall was added
-    throw new Error('Could not paste all walls.') // Prevents an incomplete paste from being saved
-  }
+  const addedRobots = addTiles(next.board, robots.map((robot) => ({ x: robot.x, y: robot.y })))
+  if (addedRobots.length !== robots.length) throw new Error(refused)
 
-
-  
-  const addedRobots = addTiles(
-    next.board, // The board we're updating
-    robots.map((robot) => ({ x: robot.x, y: robot.y })) // Positions of copied robots
-  )
-
-  
-  if (addedRobots.length !== robots.length) { // Checks whether every copied robot was placed
-    throw new Error('Could not paste all robots.') // Prevents an incomplete paste from being saved
-  }
-
-  
+  // addTiles keeps the order it was given, so each added robot lines up with its original.
   addedRobots.forEach((robot, index) => {
-    const original = robots[index] // Finds the corresponding copied robot
-
-    if (!original) return // Stops if no matching robot exists
-
+    const original = robots[index]
+    if (!original) return
     robot.typeId = original.typeId // Keeps the original robot type
     robot.color = original.color // Keeps the original color
     robot.label = original.label // Keeps the original label
-    robot.glues = [...original.glues]
+    robot.glues = [...original.glues] // Keeps the glue labels, so copies bond like the originals
   })
 
-
-
-  reassemble(next)
+  activateGlues(next.board, next.glueFunction) // Bonds pasted robots that touch, as placing does
   return next
 }
 

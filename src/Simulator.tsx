@@ -32,7 +32,9 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const [copiedTiles, setCopiedTiles] = useState<typeof tiles>([]) // Stores copies of selected robots and walls
   const [isPasting, setIsPasting] = useState(false) // Tracks whether the user is choosing where to paste
   const [isMoving, setIsMoving] = useState(false) // Tracks whether the user is choosing where to move selected tiles
-  const [tilesToMove, setTilesToMove] = useState<typeof tiles>([]) // Stores the robots and walls selected for moving
+  // Ids, not copies: a tilt during Move Mode moves the pieces, and the move should follow them.
+  const [movingIds, setMovingIds] = useState<number[]>([]) // The robots and walls chosen for moving
+  const [hover, setHover] = useState<null | { x: number; y: number }>(null) // Square under the pointer while placing
   const [history, setHistory] = useState<SimulatorState[]>([])
   const [error, setError] = useState('')
   const [zoom, setZoom] = useState(1)
@@ -55,9 +57,9 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const tiles = allTiles(state.board)
   const cells = new Map(tiles.map((tile) => [tile.y * state.board.cols + tile.x, tile]))
   const selected = new Set(selection)
-  const tilesToCopy = tiles.filter((tile) =>
-  selected.has(tile.id) // Keeps only robots and walls that are selected
-)
+  const tilesToCopy = tiles.filter((tile) => selected.has(tile.id)) // Keeps only robots and walls that are selected
+  const tilesToMove = tiles.filter((tile) => movingIds.includes(tile.id)) // Where those pieces are now
+  const placing = isPasting || isMoving // Paste or Move Mode: the next board click places the group
   const highlightedCells = new Set(selectedCells) // NEW: Tracks highlighted board positions
   const emptySelected = selectedCells.filter((index) => !cells.has(index)).length // Highlighted squares a fill would use
   const baseSize = cellSizeFor(state.board.cols, state.board.rows, panelSize.width, panelSize.height)
@@ -101,14 +103,39 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       setSelectedCells([]) // Removes the highlighted squares
       setSelection([]) // Clears selected robots and walls
     }
-    setIsPasting(false) // Cancels Paste Mode when switching tools
-    setIsMoving(false) // Cancels Move Mode whenever the user switches tools
+    endPlacing() // Switching tools cancels Paste Mode and Move Mode
     setTool(name)
   }
 
   function clearSelection() {
     setSelection([]) // Clears selected robots and walls
     setSelectedCells([]) // Clears highlighted squares
+  }
+
+  // Leaves Paste or Move Mode, so board clicks go back to the current tool.
+  function endPlacing() {
+    setIsPasting(false)
+    setIsMoving(false)
+    setMovingIds([])
+    setHover(null)
+  }
+
+  // The Paste button and Ctrl/Cmd+V both start here; pasting happens in the Select panel.
+  function startPasting() {
+    if (copiedTiles.length === 0) return
+    clearSelection() // Removes the selection outlines so the preview reads clearly
+    setMovingIds([])
+    setIsMoving(false)
+    setTool('select')
+    setIsPasting(true)
+  }
+
+  function startMoving() {
+    if (tilesToCopy.length === 0) return
+    setMovingIds(tilesToCopy.map((tile) => tile.id))
+    setIsPasting(false)
+    setHover(null)
+    setIsMoving(true)
   }
 
   
@@ -252,6 +279,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     }
   }
   function pointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (placing) { setHover(cellAt(event)); return } // The preview follows the pointer
     const current = drag.current
     if (!current) return
     if (current.pan) {
@@ -288,27 +316,19 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       getMovePositions(x, y) // Calculates their new positions
     ))
 
-    setIsMoving(false) // Exits Move Mode after moving
-    setSelection([]) // Clears the selected robots and walls
-    setSelectedCells([]) // Clears highlighted squares 
-    setTilesToMove([]) // Clears the stored moving tiles after the move finishes
-
+    endPlacing() // Exits Move Mode after moving
+    clearSelection() // Clears the selected robots, walls and highlighted squares
     return // Stops clickCell from running the normal selection logic
-
   }
-    
-    
+
     if (isPasting) {
       if (!canPasteAt(x, y)) { // Checks whether the copied group fits
         setError('Cannot paste here. The area is occupied or outside the board.') // Explains why pasting failed
         return // Stops an invalid paste
       }
-
-      
       edit((current) => pasteTiles(current, getPastePositions(x, y))) // Places copied tiles at the clicked position
-      setIsPasting(false) // Exits Paste Mode after placing the tiles
-
-      return // Actual placement will be added next
+      endPlacing() // Exits Paste Mode after placing the tiles
+      return
     }
 
 
@@ -346,15 +366,21 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   useEffect(() => {
     const handle = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement
-      if (library || event.ctrlKey || event.metaKey || event.altKey || target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)) return
+      const inField = target.isContentEditable || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName)
+      // Ctrl/Cmd+C copies the selected pieces and Ctrl/Cmd+V starts pasting them. Typing in a
+      // field, or copying text selected on the page, is left to the browser.
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !library && !inField && !window.getSelection()?.toString()) {
+        const key = event.key.toLowerCase()
+        if (key === 'c' && tilesToCopy.length) { event.preventDefault(); copySelection(); return }
+        if (key === 'v' && copiedTiles.length) { event.preventDefault(); startPasting(); return }
+      }
+      if (library || event.ctrlKey || event.metaKey || event.altKey || inField) return
       if (keys[event.key]) { event.preventDefault(); move(keys[event.key]); return }
       if (toolKeys[event.key.toLowerCase()]) { event.preventDefault(); chooseTool(toolKeys[event.key.toLowerCase()]); return }
       if (event.key === '?') setShortcuts((value) => !value)
       if (event.key === 'Escape') {
         clearSelection() // Clears selected robots, walls, and highlighted squares
-        setIsMoving(false) // Cancels Move Mode
-        setTilesToMove([]) // Clears the stored tiles waiting to be moved
-        setIsPasting(false) // Cancels Paste Mode too
+        endPlacing() // Cancels Paste Mode and Move Mode
       }
       if ((event.key === 'Delete' || event.key === 'Backspace') && selection.length) {
         event.preventDefault(); edit((current) => removeTiles(current, selection)); clearSelection()
@@ -363,6 +389,13 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     window.addEventListener('keydown', handle)
     return () => window.removeEventListener('keydown', handle)
   })
+
+  // Where the group would land if the square under the pointer were clicked, and whether it fits.
+  const previewPositions = placing && hover ? (isMoving ? getMovePositions(hover.x, hover.y) : getPastePositions(hover.x, hover.y)) : []
+  const previewFits = placing && hover !== null && (isMoving ? canMoveAt(hover.x, hover.y) : canPasteAt(hover.x, hover.y))
+  const previewCells = new Set(previewPositions
+    .filter((tile) => tile.x >= 0 && tile.y >= 0 && tile.x < state.board.cols && tile.y < state.board.rows)
+    .map((tile) => tile.y * state.board.cols + tile.x))
 
   return <div className="simulator-page simulator-editor">
     <h1>Tumble Tiles Simulator</h1>
@@ -379,7 +412,10 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
           <div className="control-row">{(['robot', 'wall', 'erase', 'select', 'pan'] as Tool[]).map((name) => <button type="button" key={name}
             aria-pressed={tool === name} className={tool === name ? 'active-tool' : ''} onClick={() => chooseTool(name)}>{name}</button>)}</div>
           {tool === 'select' && <>
-            <p className="control-hint">Drag a rectangle. Shift adds to selection.</p>
+            {/* Same two-line slot in every mode, so switching modes never moves the panels below. */}
+            <p className="control-hint">{isPasting ? 'Click a square to paste the group. Esc cancels.'
+              : isMoving ? 'Click a square to move the group. Esc cancels.'
+              : 'Drag a rectangle. Shift adds to selection.'}</p>
             {/* Counts get a short line of their own, so no number is long enough to wrap and move what is below. */}
             <p className="control-hint">{selection.length} selected, {emptySelected} empty</p>
             <div className="control-row">
@@ -396,13 +432,8 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
               <button
                 type="button"
                 className={isPasting ? 'active-tool' : ''} // Highlights Paste while Paste Mode is active
-                disabled={copiedTiles.length === 0} // Disables Paste until something has been copied 
-                onClick={() => {
-                  setSelectedCells([]) // Removes the highlighted selection squares
-                  setSelection([]) // Removes the selection outlines from robots and walls
-                  setIsPasting(true) // Activates Paste Mode
-                }}
-
+                disabled={copiedTiles.length === 0} // Disables Paste until something has been copied
+                onClick={startPasting} // Activates Paste Mode
               >
                 Paste
               </button> 
@@ -412,12 +443,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
                 type="button" // Makes this a regular button
                 className={isMoving ? 'active-tool' : ''} // Highlights Move Mode when active
                 disabled={selection.length === 0} // Requires at least one selected robot or wall
-                onClick={() => {
-                  setTilesToMove(structuredClone(tilesToCopy)) // Saves the selected robots and walls with their original positions
-                  setIsPasting(false) // Turns off Paste Mode
-                  setIsMoving(true) // Activates Move Mode
-                }}
-
+                onClick={startMoving} // Activates Move Mode
               >
                 Move
               </button>
@@ -536,6 +562,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
           <div ref={grid} className="board-grid editor-grid" aria-label="Simulation board" role="group"
             onPointerDown={pointerDown} onPointerMove={pointerMove}
             onPointerUp={() => { drag.current = null; setRegion(null) }} onPointerCancel={() => { drag.current = null; setRegion(null) }}
+            onPointerLeave={() => setHover(null)}
             style={{ '--cell': `${cellSize}px`, gridTemplateColumns: `repeat(${state.board.cols}, ${cellSize}px)`, gridTemplateRows: `repeat(${state.board.rows}, ${cellSize}px)` } as CSSProperties}>
             {Array.from({ length: state.board.cols * state.board.rows }, (_, index) => {
               const x = index % state.board.cols, y = Math.floor(index / state.board.cols)
@@ -549,7 +576,8 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
                   (tile && selected.has(tile.id)) || highlightedCells.has(index)
                     ? 'selected-cell' // Highlights selected robots, walls, AND empty squares
                     : ''
-                }`}
+                } ${previewCells.has(index) ? previewFits ? 'preview-cell' : 'preview-cell preview-blocked' : ''}`}
+                onFocus={() => { if (placing) setHover({ x, y }) }} // Keyboard users get the same preview
                 style={tile && !tile.isConcrete ? { backgroundColor: type?.color ?? tile.color ?? 'var(--color-robot)' } : undefined}
                 
                 onClick={() => {             

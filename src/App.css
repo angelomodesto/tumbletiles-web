@@ -408,6 +408,8 @@
 /* ---------- Tutorial ---------- */
 
 .tutorial-page {
+  width: 100%;
+  box-sizing: border-box;
   max-width: var(--content-width);
   margin: 0 auto;
   padding: var(--space-32) var(--space-24);
@@ -531,6 +533,8 @@
 /* ---------- Demo animation ---------- */
 
 .demo-page {
+  width: 100%;
+  box-sizing: border-box;
   max-width: var(--content-width);
   margin: 0 auto;
   padding: var(--space-32) var(--space-24);
@@ -541,15 +545,19 @@
 }
 
 .demo-caption {
+  display: grid;
+  width: 100%;
   font-size: var(--text-lg);
   line-height: 1.5;
   color: var(--color-text);
   max-width: 620px;
-  /* Holds the space for all three lines a step can show, so the board below
-     stays put as each line appears instead of being pushed down. */
+  /* Overlapping caption groups reserve the tallest step at this screen width. */
   min-height: 104px;
   margin-bottom: var(--space-12);
 }
+
+.demo-caption > div { grid-area: 1 / 1; }
+.demo-caption-reserve { visibility: hidden; pointer-events: none; }
 
 .demo-stage {
   width: 100%;

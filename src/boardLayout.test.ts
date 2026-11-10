@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { MAX_CELL, MIN_CELL, cellSizeFor } from './boardLayout'
+import { MAX_CELL, cellSizeFor } from './boardLayout'
 
 describe('fitting the board to the window', () => {
   it('leaves a small board at the normal cell size', () => {
@@ -26,8 +26,11 @@ describe('fitting the board to the window', () => {
     expect(cellSizeFor(40, 10, 800, 800)).toBe(cellSizeFor(40, 1, 800, 800))
   })
 
-  it('stops at the floor for a very large board, which then scrolls', () => {
-    expect(cellSizeFor(100, 100, 900, 700)).toBe(MIN_CELL)
+  it.each([[900, 700], [516, 277], [230, 210], [99, 75]])('fits a 100 by 100 board into %i by %i pixels', (width, height) => {
+    const size = cellSizeFor(100, 100, width, height)
+    expect(size).toBeGreaterThan(0)
+    expect(size * 100).toBeLessThanOrEqual(width)
+    expect(size * 100).toBeLessThanOrEqual(height)
   })
 
   it('returns a whole number of pixels', () => {

@@ -44,9 +44,11 @@ describe('Simulator errors', () => {
   })
 })
 
-// With no layout in jsdom the board sits at 0,0 with 28px cells (the default
-// panel size on a 15 x 15 board), so a square's centre is at index * 28 + 14.
-const at = (x: number, y: number) => ({ clientX: x * 28 + 14, clientY: y * 28 + 14 })
+// Read the rendered cell size so selection tests work after layout changes.
+const at = (x: number, y: number) => {
+  const size = parseFloat((document.querySelector('.editor-grid') as HTMLElement).style.getPropertyValue('--cell'))
+  return { clientX: (x + .5) * size, clientY: (y + .5) * size }
+}
 
 function drag(from: [number, number], to: [number, number][], shiftKey = false) {
   const board = screen.getByRole('group', { name: 'Simulation board' })
@@ -68,14 +70,30 @@ describe('Simulator square selection', () => {
     expect(count('.selected-cell')).toBe(0)
   })
 
-  it('fills the empty squares from the explicit button, as one undo step', () => {
+  it('keeps essential selection actions and removes glue and fill controls', () => {
     render(<Harness />)
     fireEvent.click(screen.getByRole('button', { name: 'select' }))
-    drag([0, 0], [[2, 1]])
-    fireEvent.click(screen.getByRole('button', { name: 'Fill with walls' }))
-    expect(count('.board-cell.wall')).toBe(6)
+    for (const name of ['Copy', 'Paste', 'Move', 'Delete selected', 'Apply type', 'Deselect']) {
+      expect(screen.getByRole('button', { name })).toBeTruthy()
+    }
+    for (const name of ['Use glues', 'Fill with walls', 'Fill with robots']) {
+      expect(screen.queryByRole('button', { name })).toBeNull()
+    }
+  })
+
+  it('applies No type to split a selected pair, and Undo restores the bond', () => {
+    const { container } = render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Column 1, row 1: empty' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Column 2, row 1: empty' }))
+    const status = () => container.querySelector('.status-bar')!.textContent
+    expect(status()).toContain('Groups 1')
+    fireEvent.click(screen.getByRole('button', { name: 'select' }))
+    drag([0, 0], [[1, 0]])
+    fireEvent.change(screen.getByLabelText('Placement type'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply type' }))
+    expect(status()).toContain('Groups 2')
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
-    expect(count('.board-cell.wall')).toBe(0)
+    expect(status()).toContain('Groups 1')
   })
 
   it('clears highlighted squares from the keyboard as well as the buttons', () => {

@@ -15,13 +15,18 @@ export const allTiles = (board: Board): Tile[] => [...board.concrete, ...board.p
 export function initialState(): SimulatorState {
   const board = createBoard(15, 15)
   board.robotTypes = [{ id: 'default', label: 'Robot', color: '#111318' }]
-  board.stickingRules = []
+  board.stickingRules = [['default', 'default']]
+  board.bondingMode = 'same-type'
   return { board, glueFunction: {}, commands: 0, lastCommand: null }
 }
 export function loadState(config: Configuration): SimulatorState {
   const board = configurationToBoard(config)
   if (!board.robotTypes?.length) board.robotTypes = initialState().board.robotTypes
-  return { board, glueFunction: { ...config.glueFunction }, commands: 0, lastCommand: null }
+  board.bondingMode = 'same-type'
+  board.stickingRules = board.robotTypes!.map((type) => [type.id, type.id])
+  const state = { board, glueFunction: { ...config.glueFunction }, commands: 0, lastCommand: null }
+  reassemble(state)
+  return state
 }
 export function moveState(state: SimulatorState, direction: Direction): SimulatorState {
   const next = structuredClone(state)
@@ -47,9 +52,9 @@ export function place(state: SimulatorState, x: number, y: number, tool: 'robot'
   const next = structuredClone(state)
   if (tool === 'wall') addConcrete(next.board, x, y)
   else {
-    if (!next.board.robotTypes?.some((t) => t.id === typeId)) return state
+    if (typeId && !next.board.robotTypes?.some((t) => t.id === typeId)) return state
     const tile = addTile(next.board, x, y)
-    if (tile) tile.typeId = typeId
+    if (tile) tile.typeId = typeId || undefined
     activateGlues(next.board, next.glueFunction)
   }
   return next
@@ -106,7 +111,8 @@ export function assignType(state: SimulatorState, ids: number[], typeId?: string
   reassemble(next)
   return next
 }
-export function setTypes(state: SimulatorState, types: RobotType[], rules: StickingRule[]): SimulatorState {
+export function setTypes(state: SimulatorState, types: RobotType[], _rules?: StickingRule[]): SimulatorState {
+  const rules: StickingRule[] = types.map((type) => [type.id, type.id])
   if (JSON.stringify(state.board.robotTypes ?? []) === JSON.stringify(types)
     && JSON.stringify(state.board.stickingRules ?? []) === JSON.stringify(rules)) return state
   const next = structuredClone(state)
@@ -217,11 +223,13 @@ export function pasteTiles(
     robot.typeId = original.typeId // Keeps the original robot type
     robot.color = original.color // Keeps the original color
     robot.label = original.label // Keeps the original label
+    robot.glues = [...original.glues]
   })
 
 
 
-  return next // Temporarily returns the copy until we add placement logic
+  reassemble(next)
+  return next
 }
 
 

@@ -84,30 +84,28 @@ component tests later will mean introducing a `jsdom` environment.
 
 ## Simulator editing
 
-- **Robot types:** pick a placement type, expand **Add a type** to give it a
-  label and color, then expand **Edit type & sticking** to choose its partners.
-  Rules are symmetric; self-sticking is a separate checkbox. Unchecked pairs
-  never stick. New types start with no sticking rules. Orthogonal contact bonds;
-  diagonal contact does not. Walls never bond.
-- **Bonds:** placed robots bond on contact according to their type rules. A
-  movement command retains the existing rigid assemblies and activates new
-  bonds once movement stops (the original end-of-tumble behavior). Editing
-  rules, deleting tiles, or applying a type recomputes assemblies. Changing a
-  label or color preserves bonds. Appearance edits commit on blur (or Enter),
-  so typing or dragging a color picker consumes one undo entry per field edit.
-  No-op edits do not consume undo history. When both touching tiles have types, type rules replace directional glue.
-  If either tile is untyped, matching facing glues determine the bond. These
-  strengths are not summed. Assigning a type retains every imported glue label;
-  **Use glues** clears the type on selected robots to restore their original
-  glue behavior, including after export/reimport. Walls are unaffected.
-- **Selection:** use **Select (V)** and drag a rectangle, or click one occupied
-  cell. Shift adds to the selection. **Apply type** changes selected robots to
-  the placement type; walls remain walls. **Delete selected** or Delete removes
-  the selected pieces. Escape clears the selection. Selected pieces remain
-  selected when moved because selection tracks tile identity, not coordinates.
+- **Robot types:** pick a placement type, or choose **No type** for robots that
+  move separately. **Add a type** creates a named, colored type; **Edit type**
+  changes its label and color. Adjacent robots bond only when both have the same
+  type. Different types and untyped robots never bond, even if imported side
+  glues match. Walls never bond. There is no partner-rule editor.
+- **Bonds:** movement keeps existing same-type assemblies rigid and activates
+  new bonds after a tumble. Applying a type, deleting or moving tiles rebuilds
+  assemblies. Imported configurations are rebuilt using this same-type policy,
+  replacing saved cross-type or untyped assemblies. Directional glue labels and
+  strengths are retained for export, but do not control this editor's bonds.
+  The standalone legacy engine and tutorial retain their existing behavior.
+  Appearance edits commit on blur or Enter, with one undo entry per field edit.
+- **Selection:** use **Select (V)** and drag a rectangle. Shift adds to the
+  selection. **Copy**, **Paste**, and **Move** operate on selected robots/walls;
+  after Paste or Move, click the new group's top-left destination. **Apply type**
+  uses the placement dropdown, including **No type** to separate selected robots.
+  **Delete selected** removes selected pieces; **Deselect** clears the highlight.
+  Escape clears selection and cancels Paste or Move. Fill and Use glues controls
+  are no longer shown.
 - **View:** use +/− for 50–400% zoom relative to the fitted cell size. **Pan (H)**
   or middle-button dragging scrolls the enlarged board. **Fit board** resets the
-  view. Large boards retain the existing minimum cell size and scroll.
+  view. Even 100 × 100 boards shrink to fit the available panel.
 - **Configurations:** browse the thumbnail gallery, or import/export XML.
   Previews come from the actual bundled XML, not separate image files.
 - **Resize:** enter dimensions and choose **Resize board**. Coordinates, types,
@@ -128,8 +126,8 @@ read and written using the existing desktop format. Export also preserves tile
 labels and colors. XML text and attribute values are escaped.
 
 `RobotTypes`, `StickingRules`, per-tile `TypeId`, and `Assembly` are web-specific
-extensions. They retain custom rule matrices and rigid groups when reopened in
-this simulator. **Do not assume custom type behavior survives loading in the
+extensions. Exports include self-type rules and current rigid groups. Reopening
+in this simulator applies the same-type-only policy, ignoring older partner rules. **Do not assume custom type behavior survives loading in the
 original desktop application**, which may ignore or reject these extensions.
 The ordinary directional-glue fields remain intact for legacy configurations.
 This change does not claim independent desktop-model equivalence.

@@ -25,8 +25,9 @@ export const DEFAULT_TEMPERATURE = 1
  * worth 1; the reference throws on an unknown label and swallows the error,
  * which silently drops the bond.
  */
-function bondStrength(a: Tile, b: Tile, glueFunction: GlueFunction, rules: StickingRule[]): number {
+function bondStrength(a: Tile, b: Tile, glueFunction: GlueFunction, rules: StickingRule[], sameTypeOnly: boolean): number {
   if (Math.abs(a.x - b.x) + Math.abs(a.y - b.y) !== 1) return 0
+  if (sameTypeOnly) return !a.isConcrete && !b.isConcrete && a.typeId !== undefined && a.typeId === b.typeId ? 1 : 0
   if (!a.isConcrete && !b.isConcrete && (a.typeId !== undefined && b.typeId !== undefined)) {
     return rules.some(([left, right]) =>
       (left === a.typeId && right === b.typeId) || (right === a.typeId && left === b.typeId),
@@ -68,13 +69,14 @@ export function canJoin(
   glueFunction: GlueFunction = DEFAULT_GLUE_FUNCTION,
   temperature: number = DEFAULT_TEMPERATURE,
   rules: StickingRule[] = [],
+  sameTypeOnly = false,
 ): boolean {
   if (a.id === b.id) return false
 
   let strength = 0
   for (const tile of a.tiles) {
     for (const other of b.tiles) {
-      strength += bondStrength(tile, other, glueFunction, rules)
+      strength += bondStrength(tile, other, glueFunction, rules, sameTypeOnly)
     }
   }
 
@@ -123,7 +125,7 @@ export function activateGlues(
           const other = board.polyominoes.find((p) => p.id === neighbor.polyId)
           if (other === undefined) continue
 
-          if (canJoin(poly, other, glueFunction, temperature, board.stickingRules ?? [])) {
+          if (canJoin(poly, other, glueFunction, temperature, board.stickingRules ?? [], board.bondingMode === 'same-type')) {
             join(board, poly, other)
             changed = true
             break

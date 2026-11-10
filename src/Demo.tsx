@@ -26,6 +26,11 @@ interface DemoProps {
 function Demo({ onDone, onSkip }: DemoProps) {
   const frames = useMemo(() => buildDemoFrames(), [])
   const stepCount = useMemo(() => countSteps(frames), [frames])
+  // Reserve each step's complete captions at the current viewport width. The
+  // tallest group sets the space, including wrapping, before animation starts.
+  const captionGroups = useMemo(() => Array.from({ length: stepCount }, (_, step) =>
+    [...new Set(frames.filter((frame) => frame.step === step).map((frame) => frame.caption))],
+  ), [frames, stepCount])
   const [index, setIndex] = useState(0)
 
   const reducedMotion =
@@ -70,9 +75,16 @@ function Demo({ onDone, onSkip }: DemoProps) {
     <div className="demo-page">
       <h1>How Tumble Tiles works</h1>
       <div className="demo-caption">
-        {captions.map((caption) => (
-          <p key={caption}>{caption}</p>
+        {captionGroups.map((group, step) => (
+          <div key={step} className="demo-caption-reserve" aria-hidden="true">
+            {group.map((caption) => <p key={caption}>{caption}</p>)}
+          </div>
         ))}
+        <div className="demo-caption-current">
+          {captions.map((caption) => (
+            <p key={caption}>{caption}</p>
+          ))}
+        </div>
       </div>
 
       <div className="demo-stage">

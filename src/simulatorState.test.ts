@@ -3,7 +3,7 @@ import { DOMParser } from '@xmldom/xmldom'
 import type { XmlParser } from './engine/xml'
 import { MAX_BOARD_SIZE, parseConfiguration } from './engine/xml'
 import { addConcrete, addTile, activateGlues } from './engine'
-import { allTiles, assignType, exportState, fillCells, initialState, loadState, moveState, place, recordHistory, removeTiles, resize, selectCells, selectRegion, setTypes } from './simulatorState'
+import { allTiles, assignType, exportState, fillCells, initialState, loadState, moveSelectedTiles, moveState, pasteTiles, place, recordHistory, removeTiles, resize, selectCells, selectRegion, setTypes } from './simulatorState'
 const parser = new DOMParser() as unknown as XmlParser
 const types = [
   { id: 'blue', label: 'Blue & <one> "robot"', color: '#0066ff' },
@@ -183,5 +183,56 @@ describe('filling selected squares', () => {
   it('clamps a dragged rectangle to the board', () => {
     const state = resize(initialState(), 3, 3)
     expect(selectCells(state.board, { x: -4, y: -4 }, { x: 9, y: 1 })).toEqual([0, 1, 2, 3, 4, 5])
+  })
+})
+
+describe('copy, paste and move', () => {
+  // Two robots side by side whose facing glues match, so they start bonded.
+  function gluedPair() {
+    const state = initialState()
+    state.glueFunction = { A: 1 }
+    addTile(state.board, 1, 1, ['', 'A', '', ''])
+    addTile(state.board, 2, 1, ['', '', '', 'A'])
+    activateGlues(state.board, state.glueFunction)
+    return state
+  }
+  const shifted = (state: ReturnType<typeof initialState>, dx: number, dy: number) =>
+    allTiles(state.board).map((t) => ({ ...t, x: t.x + dx, y: t.y + dy }))
+
+  it('pastes robots with their glue labels, and bonds them straight away', () => {
+    const start = gluedPair()
+    const after = pasteTiles(start, shifted(start, 0, 5))
+    const pasted = allTiles(after.board).filter((t) => t.y === 6)
+    expect(pasted.map((t) => t.glues)).toEqual([['', 'A', '', ''], ['', '', '', 'A']])
+    expect(new Set(pasted.map((t) => t.polyId)).size).toBe(1)
+  })
+
+  it('keeps type, colour and label on pasted robots', () => {
+    const start = place(setTypes(initialState(), types, []), 0, 0, 'robot', 'blue')
+    const pasted = allTiles(pasteTiles(start, shifted(start, 3, 3)).board).find((t) => t.x === 3 && t.y === 3)
+    expect(pasted?.typeId).toBe('blue')
+  })
+
+  it('refuses a paste onto an occupied square and changes nothing', () => {
+    const start = gluedPair()
+    expect(() => pasteTiles(start, shifted(start, 1, 0))).toThrow(/Cannot paste here/)
+    expect(allTiles(start.board)).toHaveLength(2)
+  })
+
+  it('refuses a move onto a piece that is not moving, or off the board', () => {
+    let start = gluedPair()
+    start = place(start, 5, 1, 'wall', 'default')
+    const ids = start.board.polyominoes.flatMap((p) => p.tiles.map((t) => t.id))
+    expect(() => moveSelectedTiles(start, ids, shifted(start, 3, 0).filter((t) => ids.includes(t.id)))).toThrow(/Cannot move here/)
+    expect(() => moveSelectedTiles(start, ids, shifted(start, -5, 0).filter((t) => ids.includes(t.id)))).toThrow(/Cannot move here/)
+  })
+
+  it('moves a group, keeps it bonded, and returns the same state for a move to where it already is', () => {
+    const start = gluedPair()
+    const ids = allTiles(start.board).map((t) => t.id)
+    expect(moveSelectedTiles(start, ids, allTiles(start.board))).toBe(start)
+    const moved = moveSelectedTiles(start, ids, shifted(start, 4, 6))
+    expect(allTiles(moved.board).map((t) => [t.x, t.y])).toEqual([[5, 7], [6, 7]])
+    expect(moved.board.polyominoes).toHaveLength(1)
   })
 })

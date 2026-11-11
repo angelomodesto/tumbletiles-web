@@ -33,9 +33,6 @@ export interface XmlParser {
 /** Thrown when a file is not a configuration we can use. */
 export class ConfigurationError extends Error {}
 
-/** Largest board we will load. Matches the simulator's own limit. */
-export const MAX_BOARD_SIZE = 100
-
 function textOf(parent: Element, tag: string): string {
   return parent.getElementsByTagName(tag)[0]?.textContent?.trim() ?? ''
 }
@@ -63,12 +60,6 @@ export function parseConfiguration(
 
   if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0) {
     throw new ConfigurationError('This board has no usable size.')
-  }
-
-  if (cols > MAX_BOARD_SIZE || rows > MAX_BOARD_SIZE) {
-    throw new ConfigurationError(
-      `This board is ${cols} by ${rows}, larger than the ${MAX_BOARD_SIZE} by ${MAX_BOARD_SIZE} limit.`,
-    )
   }
 
   // GlueFunction lists each label and how strongly it bonds.

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, Dispatch, PointerEvent, SetStateAction } from 'react'
 import type { Direction } from './engine'
 import type { RobotType } from './engine/types'
-import { MAX_BOARD_SIZE, parseConfiguration } from './engine/xml'
+import { parseConfiguration } from './engine/xml'
 import type { Configuration } from './engine/xml'
-import { cellSizeFor } from './boardLayout'
+import { MAX_CELL, cellSizeFor } from './boardLayout'
 
 
 
@@ -24,6 +24,19 @@ type Tool = 'robot' | 'wall' | 'erase' | 'select' | 'pan'
 const arrows: [Direction, string, string][] = [['N', '↑', 'up'], ['W', '←', 'left'], ['S', '↓', 'down'], ['E', '→', 'right']]
 const keys: Record<string, Direction> = { ArrowUp: 'N', ArrowLeft: 'W', ArrowDown: 'S', ArrowRight: 'E' }
 const toolKeys: Record<string, Tool> = { r: 'robot', w: 'wall', e: 'erase', v: 'select', h: 'pan' }
+const MIN_ZOOM = 0.5
+/** Below this many pixels per cell the wall hatch blurs, so walls turn solid and grid lines drop. */
+const COMPACT_CELL = 12
+/** Boards with more squares than this get a note that drawing and dragging may be slow. */
+const LARGE_BOARD_CELLS = 40_000
+/** Boards with more squares than this ask first, so a mistyped size cannot freeze the tab. */
+const CONFIRM_BOARD_CELLS = 1_000_000
+
+/** There is no size cap; only a board big enough to freeze the tab asks for confirmation first. */
+function confirmLargeBoard(cols: number, rows: number): boolean {
+  if (cols * rows <= CONFIRM_BOARD_CELLS) return true
+  return window.confirm(`A ${cols} × ${rows} board has ${(cols * rows).toLocaleString()} squares and may make this tab unresponsive. Continue?`)
+}
 export default function Simulator({ state, setState }: { state: SimulatorState; setState: Dispatch<SetStateAction<SimulatorState>> }) {
   const [tool, setTool] = useState<Tool>('robot')
   const [typeId, setTypeId] = useState(state.board.robotTypes?.[0]?.id ?? 'default')
@@ -63,6 +76,9 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
   const highlightedCells = new Set(selectedCells) // NEW: Tracks highlighted board positions
   const baseSize = cellSizeFor(state.board.cols, state.board.rows, panelSize.width, panelSize.height)
   const cellSize = baseSize * zoom
+  // Zoom in far enough to edit any board: at least 4x, or until cells reach their full size.
+  const maxZoom = baseSize > 0 ? Math.max(4, MAX_CELL / baseSize) : 4
+  const largeBoard = state.board.cols * state.board.rows > LARGE_BOARD_CELLS
 
   function edit(action: (current: SimulatorState) => SimulatorState) {
     try {
@@ -243,7 +259,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     setZoom(1)
     if (panel.current) { panel.current.scrollLeft = 0; panel.current.scrollTop = 0 }
   }
-  function changeZoom(value: number) { setZoom(Math.max(0.5, Math.min(4, value))) }
+  function changeZoom(value: number) { setZoom(Math.max(MIN_ZOOM, Math.min(maxZoom, value))) }
   function updateType(type: RobotType) {
     edit((current) => setTypes(current, types.map((t) => t.id === type.id ? type : t), current.board.stickingRules ?? []))
   }
@@ -390,15 +406,8 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
     .map((tile) => tile.y * state.board.cols + tile.x))
 
   return <div className="simulator-page simulator-editor">
-    <h1>Tumble Tiles Simulator</h1>
     <div className="simulator-layout">
       <aside className="simulator-controls">
-        <section className="control-panel">
-          <h2>Commands</h2>
-          <div className="arrow-pad">{arrows.map(([direction, glyph, name]) => <button type="button" key={direction}
-            title={`Move all robots ${name} (${glyph})`} aria-label={`Move all robots ${name}`} onClick={() => move(direction)}>{glyph}</button>)}</div>
-          <p className="control-hint">Arrow keys work too.</p>
-        </section>
         <section className="control-panel">
           <h2>Tools</h2>
           <div className="control-row">{(['robot', 'wall', 'erase', 'select', 'pan'] as Tool[]).map((name) => <button type="button" key={name}
@@ -454,7 +463,7 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
             <option value="">No type (moves separately)</option>
             {types.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
           </select></label>
-          <p className="control-hint">Robots stick only to their own type. Robots with no type stay separate.</p>
+          <p className="control-hint">Only same types stick.</p>
           {activeType && <details className="type-editor"><summary>Edit type</summary>
             <TypeAppearanceEditor key={`${activeType.id}:${activeType.label}:${activeType.color}`} type={activeType} onCommit={updateType} />
           </details>}
@@ -474,48 +483,23 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
         </section>
         <section className="control-panel">
           <h2>Configurations</h2>
-          <button ref={libraryButton} onClick={() => setLibrary(true)}>Browse configurations</button>
-          <div className="control-row"><label className="import-button">Import XML<input type="file" accept=".xml" className="file-input" aria-label="Import XML"
+          {/* One row: the full names live in each control's label and tooltip. */}
+          <div className="control-row config-row"><button ref={libraryButton} title="Browse the bundled configurations" onClick={() => setLibrary(true)}>Browse</button>
+            <label className="import-button" title="Import a board from an XML file">Import<input type="file" accept=".xml" className="file-input" aria-label="Import XML"
             onChange={async (e) => {
               const file = e.target.files?.[0]; e.target.value = ''
               if (!file) return
-              try { load(parseConfiguration(await file.text())) } catch (e) { setError(e instanceof Error ? e.message : 'Could not read that file.') }
+              try {
+                const config = parseConfiguration(await file.text())
+                if (confirmLargeBoard(config.cols, config.rows)) load(config)
+              } catch (e) { setError(e instanceof Error ? e.message : 'Could not read that file.') }
             }} /></label>
-            <button className="import-button" onClick={() => {
+            <button className="import-button" aria-label="Export XML" title="Export this board as XML. Robot types are saved for this web simulator; desktop tools may ignore them." onClick={() => {
               const url = URL.createObjectURL(new Blob([exportState(state)], { type: 'application/xml' }))
               const link = document.createElement('a'); link.href = url; link.download = 'tumbletiles-board.xml'; link.click()
               setTimeout(() => URL.revokeObjectURL(url), 1000)
-            }}>Export XML</button></div>
-          <p className="control-hint">Robot types are saved for this web simulator. Desktop tools may ignore them.</p>
+            }}>Export</button></div>
         </section>
-        <section className="control-panel">
-          <h2>Board</h2>
-          
-        <form className="control-row" onSubmit={(e) => {
-          e.preventDefault() // Prevents the page from refreshing
-
-          const newWidth = Number(width) // Gets the requested width
-          const newHeight = Number(height) // Gets the requested height
-
-          try {
-            const next = resize(state, newWidth, newHeight) // Validates and resizes the board
-
-            if (next !== state) {
-              edit(() => next) // Saves the resize in undo history
-              setSelection([]) // Clears selected robots and walls
-              setSelectedCells([]) // Clears highlighted squares
-            }
-          } catch (error) {
-            setError(error instanceof Error ? error.message : 'Could not resize the board.')
-          }
-        }}>
-
-            <label>Width<input aria-label="Width" type="number" min="1" max={MAX_BOARD_SIZE} required value={width} onChange={(e) => setWidth(e.target.value)} /></label>
-            <label>Height<input aria-label="Height" type="number" min="1" max={MAX_BOARD_SIZE} required value={height} onChange={(e) => setHeight(e.target.value)} /></label>
-            <button type="submit">Resize board</button>
-          </form><p className="control-hint">Up to {MAX_BOARD_SIZE} × {MAX_BOARD_SIZE}. Shrinking keeps all tiles safe.</p>
-        </section>
-        
         <div className="control-danger">
           <button onClick={() => {
             edit((s) => ({
@@ -533,15 +517,41 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
       </aside>
       <main className="simulator-stage">
         <p className="narrow-note">This screen is narrow for a board. The board scrolls inside its panel; a wider screen is easier. The tutorial reads well at this size.</p>
+        {/* One toolbar for the view and the board size, so the sidebar fits on one screen. */}
         <div className="view-controls control-row" aria-label="Board view">
-          <button aria-label="Zoom out" disabled={zoom <= 0.5} onClick={() => changeZoom(zoom / 1.25)}>−</button>
-          <span aria-live="polite">{Math.round(zoom * 100)}%</span>
-          <button aria-label="Zoom in" disabled={zoom >= 4} onClick={() => changeZoom(zoom * 1.25)}>+</button>
+          <div className="toolbar-group" role="group" aria-label="Zoom">
+            <button aria-label="Zoom out" disabled={zoom <= MIN_ZOOM} onClick={() => changeZoom(zoom / 1.25)}>−</button>
+            <span aria-live="polite">{Math.round(zoom * 100)}%</span>
+            <button aria-label="Zoom in" disabled={zoom >= maxZoom} onClick={() => changeZoom(zoom * 1.25)}>+</button>
+          </div>
           <button onClick={fit}>Fit board</button>
           <button disabled={!history.length} onClick={undo}>Undo</button>
+          <form className="toolbar-group board-size" aria-label="Board size" onSubmit={(e) => {
+            e.preventDefault() // Prevents the page from refreshing
+            const newWidth = Number(width) // Gets the requested width
+            const newHeight = Number(height) // Gets the requested height
+            if (!confirmLargeBoard(newWidth, newHeight)) return
+            try {
+              const next = resize(state, newWidth, newHeight) // Validates and resizes the board
+              if (next !== state) {
+                edit(() => next) // Saves the resize in undo history
+                setSelection([]) // Clears selected robots and walls
+                setSelectedCells([]) // Clears highlighted squares
+              }
+            } catch (error) {
+              setError(error instanceof Error ? error.message : 'Could not resize the board.')
+            }
+          }}>
+            <input aria-label="Width" type="number" min="1" required value={width} onChange={(e) => setWidth(e.target.value)} />
+            <span aria-hidden="true">×</span>
+            <input aria-label="Height" type="number" min="1" required value={height} onChange={(e) => setHeight(e.target.value)} />
+            <button type="submit">Resize</button>
+          </form>
         </div>
-        <div ref={panel} className={`board-panel editor-board-panel ${tool === 'pan' ? 'pan-tool' : ''}`}>
-          <div ref={grid} className="board-grid editor-grid" aria-label="Simulation board" role="group"
+        {/* The board panel plus the arrow pad, which floats in its bottom-right corner. */}
+        <div className="board-frame">
+          <div ref={panel} className={`board-panel editor-board-panel ${tool === 'pan' ? 'pan-tool' : ''}`}>
+          <div ref={grid} className={`board-grid editor-grid ${cellSize < COMPACT_CELL ? 'compact' : ''}`} aria-label="Simulation board" role="group"
             onPointerDown={pointerDown} onPointerMove={pointerMove}
             onPointerUp={() => { drag.current = null; setRegion(null) }} onPointerCancel={() => { drag.current = null; setRegion(null) }}
             onPointerLeave={() => setHover(null)}
@@ -572,7 +582,11 @@ export default function Simulator({ state, setState }: { state: SimulatorState; 
             })}
             {region && <div className="selection-region" style={{ left: region.x * cellSize, top: region.y * cellSize, width: region.width * cellSize, height: region.height * cellSize }} />}
           </div>
-          <p ref={message} className="board-message board-message-empty">{!tiles.length ? 'Empty board. Pick a tool and click a square, or load a configuration.' : ''}</p>
+          <p ref={message} className="board-message board-message-empty">{largeBoard ? 'Large board: drawing and dragging may be slow.'
+            : !tiles.length ? 'Empty board. Pick a tool and click a square, or load a configuration.' : ''}</p>
+        </div>
+          <div className="arrow-pad board-arrows" role="group" aria-label="Tilt">{arrows.map(([direction, glyph, name]) => <button type="button" key={direction}
+            title={`Move all robots ${name} (${glyph})`} aria-label={`Move all robots ${name}`} onClick={() => move(direction)}>{glyph}</button>)}</div>
         </div>
         {error && <p className="board-error" role="alert">{error}</p>}
         <div className="status-bar" aria-live="polite">

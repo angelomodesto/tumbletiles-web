@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import type { XmlParser } from './engine/xml'
-import { MAX_BOARD_SIZE, parseConfiguration } from './engine/xml'
+import { parseConfiguration } from './engine/xml'
 import { addConcrete, addTile, activateGlues } from './engine'
 import { allTiles, assignType, exportState, fillCells, initialState, loadState, moveSelectedTiles, moveState, pasteTiles, place, recordHistory, removeTiles, resize, selectCells, selectRegion, setTypes } from './simulatorState'
 const parser = new DOMParser() as unknown as XmlParser
@@ -161,9 +161,10 @@ describe('review regressions: meaningful undo entries', () => {
     expect(history).toEqual([before])
     expect(recordHistory(history, placed, placed)).toBe(history)
   })
-  it('uses the shared import cap for resizing, including the boundary', () => {
-    expect(resize(initialState(), MAX_BOARD_SIZE, MAX_BOARD_SIZE).board.cols).toBe(MAX_BOARD_SIZE)
-    expect(() => resize(initialState(), MAX_BOARD_SIZE + 1, 1)).toThrow(/dimensions/)
+  it('resizes past 100 by 100, since there is no size cap, but only to whole sizes of at least 1', () => {
+    expect(resize(initialState(), 150, 150).board.cols).toBe(150)
+    expect(() => resize(initialState(), 0, 5)).toThrow(/dimensions/)
+    expect(() => resize(initialState(), 1.5, 5)).toThrow(/dimensions/)
   })
 })
 

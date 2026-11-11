@@ -60,9 +60,9 @@ describe('reading a configuration', () => {
     )
   })
 
-  it('rejects a board larger than the limit', () => {
+  it('accepts boards larger than 100 by 100, since there is no size cap', () => {
     const big = SMALL.replace('height="5" width="5"', 'height="250" width="250"')
-    expect(() => parseConfiguration(big, parser)).toThrow(/larger than/)
+    expect(parseConfiguration(big, parser)).toMatchObject({ cols: 250, rows: 250 })
   })
 
   it('ignores tiles outside the board', () => {

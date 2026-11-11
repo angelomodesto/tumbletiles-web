@@ -169,3 +169,43 @@ describe('Simulator copy, paste and move', () => {
     expect(count('.board-cell.robot')).toBe(2)
   })
 })
+
+describe('Simulator toolbar and board size', () => {
+  function resizeTo(cols: number, rows: number) {
+    fireEvent.change(screen.getByLabelText('Width'), { target: { value: String(cols) } })
+    fireEvent.change(screen.getByLabelText('Height'), { target: { value: String(rows) } })
+    fireEvent.submit(screen.getByRole('form', { name: 'Board size' }))
+  }
+
+  it('keeps the arrow pad in the board frame and the size inputs in the toolbar', () => {
+    const { container } = render(<Harness />)
+    const pad = screen.getByRole('group', { name: 'Tilt' })
+    expect(pad.closest('.board-frame')).not.toBeNull()
+    expect(pad.className).toContain('arrow-pad')
+    expect([...pad.querySelectorAll('button')].map((b) => b.getAttribute('aria-label')))
+      .toEqual(['Move all robots up', 'Move all robots left', 'Move all robots down', 'Move all robots right'])
+    const toolbar = container.querySelector('.view-controls')!
+    expect(toolbar.contains(screen.getByLabelText('Width'))).toBe(true)
+    expect(toolbar.contains(screen.getByLabelText('Height'))).toBe(true)
+  })
+
+  // Wide, short boards keep jsdom fast: thousands of squares are slow to render here.
+  // The large-board note (over 40,000 squares) is checked in the browser instead.
+  it('resizes past 100 wide and draws walls solid once squares are small', () => {
+    render(<Harness />)
+    const board = () => screen.getByRole('group', { name: 'Simulation board' })
+    expect(board().classList.contains('compact')).toBe(false)
+    resizeTo(101, 10)
+    expect(board().style.gridTemplateColumns).toMatch(/^repeat\(101, /)
+    expect(board().classList.contains('compact')).toBe(true)
+    expect(screen.queryByText('Large board: drawing and dragging may be slow.')).toBeNull()
+  })
+
+  it('lets a board with small squares zoom in past the old 4x limit', () => {
+    render(<Harness />)
+    resizeTo(101, 10)
+    const zoomIn = screen.getByRole('button', { name: 'Zoom in' }) as HTMLButtonElement
+    for (let i = 0; i < 7; i++) fireEvent.click(zoomIn) // 1.25^7 is about 4.8x
+    expect(zoomIn.disabled).toBe(false)
+  })
+})

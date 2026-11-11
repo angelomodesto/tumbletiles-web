@@ -103,12 +103,18 @@ component tests later will mean introducing a `jsdom` environment.
   **Delete selected** removes selected pieces; **Deselect** clears the highlight.
   Escape clears selection and cancels Paste or Move. Fill and Use glues controls
   are no longer shown.
-- **View:** use +/− for 50–400% zoom relative to the fitted cell size. **Pan (H)**
-  or middle-button dragging scrolls the enlarged board. **Fit board** resets the
-  view. Even 100 × 100 boards shrink to fit the available panel.
+- **Tilt:** the arrow pad in the board's bottom-right corner (or the arrow keys)
+  moves every robot. On narrow screens the pad sits under the board.
+- **View:** the toolbar above the board zooms with +/− from 50% up to whatever
+  gives 30px squares, relative to the fitted cell size. **Pan (H)** or
+  middle-button dragging scrolls the enlarged board. **Fit board** resets the
+  view. When squares are drawn smaller than 12px, walls turn solid gray and grid
+  lines drop, so walls stay visible.
 - **Configurations:** browse the thumbnail gallery, or import/export XML.
   Previews come from the actual bundled XML, not separate image files.
-- **Resize:** enter dimensions and choose **Resize board**. Coordinates, types,
+- **Resize:** enter a width and height in the toolbar and choose **Resize**.
+  There is no size cap. Boards over 40,000 squares show a note that drawing may be
+  slow, and resizing or importing past 1,000,000 squares asks first. Coordinates, types,
   glues, and bonded groups are retained. A shrink that would hide or discard
   pieces is rejected with a message; delete those pieces first.
 - **Undo:** the last 30 simulation/edit operations can be undone, including

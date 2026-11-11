@@ -33,6 +33,7 @@
   /* Board pieces */
   --color-robot: #111318;
   --color-wall: #9aa0a8;
+  --color-wall-solid: #6b717a; /* Walls when cells are too small for the hatch: 4.9:1 vs empty, 3.8:1 vs robots */
   --color-selection-fill: color-mix(in srgb, var(--color-wall) 20%, transparent);
   --color-dialog-scrim: color-mix(in srgb, var(--color-text) 40%, transparent);
 

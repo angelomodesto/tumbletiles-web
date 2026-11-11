@@ -1,7 +1,7 @@
 import { activateGlues, addConcrete, addConcretes, addTile, addTiles, createBoard, fromIndex, tumble } from './engine'
 import type { Board, Direction, GlueFunction, Tile } from './engine'
 import type { RobotType, StickingRule } from './engine/types'
-import { MAX_BOARD_SIZE, configurationToBoard, serializeConfiguration } from './engine/xml'
+import { configurationToBoard, serializeConfiguration } from './engine/xml'
 import type { Configuration } from './engine/xml'
 
 export interface SimulatorState {
@@ -128,7 +128,7 @@ export function setTypes(state: SimulatorState, types: RobotType[], _rules?: Sti
   return next
 }
 export function resize(state: SimulatorState, cols: number, rows: number): SimulatorState {
-  if (![cols, rows].every((n) => Number.isInteger(n) && n >= 1 && n <= MAX_BOARD_SIZE)) throw new Error(`Board dimensions must be between 1 and ${MAX_BOARD_SIZE}.`)
+  if (![cols, rows].every((n) => Number.isInteger(n) && n >= 1)) throw new Error('Board dimensions must be whole numbers of at least 1.')
   if (cols === state.board.cols && rows === state.board.rows) return state
   if (allTiles(state.board).some((t) => t.x >= cols || t.y >= rows)) {
     throw new Error('Remove the tiles outside the new dimensions before shrinking. Your board has been kept intact.')
